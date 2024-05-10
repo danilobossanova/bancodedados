@@ -1,0 +1,32 @@
+DROP TRIGGER SANKHYA.TRG_BIU_TGFCABWMS_DCCO;
+
+CREATE OR REPLACE TRIGGER SANKHYA.TRG_BIU_TGFCABWMS_DCCO
+BEFORE INSERT OR UPDATE
+ON SANKHYA.TGFCAB
+REFERENCING NEW AS NEW OLD AS OLD
+FOR EACH ROW
+
+    /*
+    * @author: Danilo Fernando <danilo.bossanova@hotmail.com>
+    * @since: 09/05/2024 12:53
+    * @description: Valida tipo de Entrega
+    */
+
+DECLARE
+
+    -- Constante
+    AGUARDANDO_APROVACAO CONSTANT CHAR(1) := 'A';
+
+BEGIN
+
+    CASE
+        WHEN INSERTING THEN
+
+
+
+        WHEN UPDATING THEN
+    END CASE;
+
+
+END;
+/

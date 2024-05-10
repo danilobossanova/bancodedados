@@ -33,9 +33,9 @@ BEGIN
     -- Fazer as cópias conforme o número de cópias informado
     FOR i IN 1..NUMERODECOPIAS LOOP
     
-         -- Adicionar 1 à descrição e ao endereço
-        v_descrend := v_descrend || ' ' || (TO_NUMBER(REGEXP_REPLACE(v_descrend, '[^[:digit:]]', '')) + i); -- Modificação nesta linha
-        v_endereco := REGEXP_REPLACE(v_endereco, '(\d+)$', TO_CHAR(TO_NUMBER(REGEXP_REPLACE(v_endereco, '(\d+)$', '\1')) + i)); -- Modificação nesta linha
+        -- Adicionar 1 à descrição e ao endereço
+        v_descrend := v_descrend || ' ' || (TO_NUMBER(REGEXP_REPLACE(v_descrend, '[^[:digit:]]', '')) + TO_NUMBER(i)); -- Modificação nesta linha
+        v_endereco := REGEXP_REPLACE(v_endereco, '(\d+)$', TO_CHAR(TO_NUMBER(REGEXP_REPLACE(v_endereco, '(\d+)$', '\1')) + TO_NUMBER(i))); -- Modificação nesta linha
 
         -- Inserir o novo registro
         INSERT INTO TGWEND (

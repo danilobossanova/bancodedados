@@ -1,0 +1,254 @@
+<dashboard titulo="Pre-Recebimento de Produtos" descricao="Created by Danilo Fernando - 24/05/2024 18:04 - Dash que mostra vinculos de produtos de uma NU" grupo="WMS"><layout>
+  <container orientacao="H" tamanhoRelativo="100">
+    <gadget id="1604" />
+  </container>
+</layout><gadgetSS nugdg="1604" titulo="Pre Recebimento de Produtos" descricao="Created by Danilo Fernando - 24/05/2024 13:00" categoria="WMS" urlcomponente=""><gadget>
+  <prompt-parameters>
+    <parameter id="NU" description="Numero Unico" metadata="text" required="true" keep-last="true" keep-date="false" limit-char="7" order="0" />
+    <parameter id="EMPRESAS" description="Empresa" metadata="multiList:Text" listType="sql" required="true" keep-last="true" keep-date="false" order="1">
+      <expression type="SQL"><![CDATA[SELECT CODEMP AS VALUE, CODEMP||' - '||RAZAOABREV AS LABEL FROM TSIEMP
+WHERE PERMITE_EMPRESA(CODEMP) = 'S' AND CODEMPMATRIZ IS NOT NULL ORDER BY 1 ASC]]></expression>
+    </parameter>
+  </prompt-parameters>
+  <level id="lvl_akslqlb" description="Principal">
+    <args>
+      <arg id="ARG_CODPROD" type="integer" />
+      <arg id="ARG_CODEND" type="integer" />
+    </args>
+    <container orientacao="V" tamanhoRelativo="100">
+      <container orientacao="V" tamanhoRelativo="33">
+        <grid id="grd_akslqlc" useNewGrid="S">
+          <title><![CDATA[Produtos sem Vinculo ou Não controlados pelo WMS na NU :NU]]></title>
+          <expression type="sql" data-source="MGEDS"><![CDATA[SELECT 
+
+    FITE.NUNOTA,
+    FITE.SEQUENCIA,
+    FITE.CODEMP,
+    FITE.CODPROD,
+    PROD.DESCRPROD,
+    PROD.DESCRPRODNFE,
+    PROD.AD_UTILIZAVLM,
+    CASE PROD.UTILIZAWMS
+        WHEN 'S' THEN 1
+        WHEN 'N' THEN 0
+        ELSE NULL
+    END AS UTILIZAWMS,
+    PROD.USASERIEFAB,
+    PROD.USASERIESEPWMS,
+    PROD.FABRICANTE,
+    FITE.USOPROD,
+    FITE.ORIGPROD,
+    FITE.SOLCOMPRA,
+    FITE.PENDENTE,
+    FITE.QTDNEG,
+    FITE.CODVOL,
+    FITE.ALTURA,
+    PROD.ALTURA AS ALTURA_PRODUTO,
+    FITE.LARGURA,
+    PROD.LARGURA AS LARGURA_PRODUTO,
+    FITE.M3,
+    FITE.ESPESSURA,
+    FITE.RESERVA,
+    FITE.QTDWMS,
+    FITE.PRODUTONFE,
+    FITE.AD_QTDPROGRAMADA,
+    FITE.AD_NCM
+
+FROM TGFITE FITE
+INNER JOIN TGFPRO PROD ON FITE.CODPROD = PROD.CODPROD
+WHERE FITE.NUNOTA = :NU
+ORDER BY FITE.SEQUENCIA]]></expression>
+          <metadata>
+            <field name="NUNOTA" label="NU" type="I" visible="true" useFooter="false" />
+            <field name="SEQUENCIA" label="Seq." type="I" visible="true" useFooter="false" />
+            <field name="CODEMP" label="Cod. Emp" type="I" visible="true" useFooter="false" />
+            <field name="CODPROD" label="Cód. Prod." type="I" visible="true" useFooter="false" />
+            <field name="DESCRPROD" label="Descrição" type="S" visible="true" useFooter="false" />
+            <field name="DESCRPRODNFE" label="Desc. Prod. NF-e" type="S" visible="true" useFooter="false" />
+            <field name="AD_UTILIZAVLM" label="Utiliza VLM ?" type="S" visible="true" useFooter="false" />
+            <field name="UTILIZAWMS" label="Utiliza WMS" type="I" visible="true" useFooter="null">
+              <formatter equalThan="0"><![CDATA[<span style="; src:iconOvalRed; somente-icone:S">
+  <b>$VALUE</b>
+</span>]]></formatter>
+              <formatter equalThan="1"><![CDATA[<span style="; src:iconAccept; somente-icone:S">$VALUE</span>]]></formatter>
+              <formatter isEmpty="true"><![CDATA[<span style="; src:iconWarning; somente-icone:S">$VALUE</span>]]></formatter>
+            </field>
+            <field name="USASERIEFAB" label="Usa Serie Fabricante" type="S" visible="true" useFooter="false" />
+            <field name="USASERIESEPWMS" label="Usa Serie WMS" type="S" visible="true" useFooter="false" />
+            <field name="FABRICANTE" label="Fabricante" type="S" visible="true" useFooter="false" />
+            <field name="USOPROD" label="Uso Prod." type="S" visible="true" useFooter="false" />
+            <field name="ORIGPROD" label="Origem" type="S" visible="true" useFooter="false" />
+            <field name="SOLCOMPRA" label="Sol. Compra" type="S" visible="true" useFooter="false" />
+            <field name="PENDENTE" label="Pendente" type="S" visible="true" useFooter="false" />
+            <field name="QTDNEG" label="Qtd. Neg." type="F" visible="true" useFooter="false" />
+            <field name="CODVOL" label="Vol" type="S" visible="true" useFooter="false" />
+            <field name="ALTURA" label="Altura" type="F" visible="true" useFooter="false" />
+            <field name="ALTURA_PRODUTO" label="Altura Produto" type="F" visible="true" useFooter="false" />
+            <field name="LARGURA" label="Largura" type="F" visible="true" useFooter="false" />
+            <field name="LARGURA_PRODUTO" label="Largura" type="F" visible="true" useFooter="false" />
+            <field name="M3" label="M3" type="F" visible="true" useFooter="false" />
+            <field name="ESPESSURA" label="Espessura" type="F" visible="true" useFooter="false" />
+            <field name="RESERVA" label="Reserva" type="S" visible="true" useFooter="false" />
+            <field name="QTDWMS" label="Qtd. WMS" type="F" visible="true" useFooter="false" />
+            <field name="PRODUTONFE" label="Prod. NFE" type="S" visible="true" useFooter="false" />
+            <field name="AD_QTDPROGRAMADA" label="Qtd. Programada" type="F" visible="true" useFooter="false" />
+            <field name="AD_NCM" label="NCM" type="S" visible="true" useFooter="false" />
+          </metadata>
+          <refresh-details ui-list="grd_akslqlg">
+            <param id="ARG_CODPROD">$CODPROD</param>
+          </refresh-details>
+        </grid>
+      </container>
+      <container orientacao="H" tamanhoRelativo="33">
+        <container orientacao="V" tamanhoRelativo="135">
+          <grid id="grd_akslqlg" useNewGrid="S">
+            <args>
+              <arg id="ARG_CODPROD" type="integer" />
+              <arg id="ARG_CODEND" type="integer" />
+            </args>
+            <title><![CDATA[Endreços vinculados para o Produto :ARG_CODPROD]]></title>
+            <expression type="sql" data-source="MGEDS"><![CDATA[SELECT
+
+ WEXP.CODPROD,
+ WEXP.CODEND,
+ ENDE.DESCREND,
+ ENDE.ENDERECO,
+ WEXP.ATIVO,
+ WEXP.CODVOL,
+ WEXP.ESTMIN,
+ WEXP.ESTMAX,
+ WEXP.DTINICIO
+
+FROM TGWEXP WEXP
+INNER JOIN TGWEND ENDE ON WEXP.CODEND = ENDE.CODEND
+AND ENDE.CODEMP IN :EMPRESAS
+WHERE WEXP.CODPROD = :ARG_CODPROD
+]]></expression>
+            <metadata>
+              <field name="CODPROD" label="CODPROD" type="I" visible="true" useFooter="false" />
+              <field name="CODEND" label="CODEND" type="I" visible="true" useFooter="false" />
+              <field name="DESCREND" label="DESCREND" type="S" visible="true" useFooter="false" />
+              <field name="ENDERECO" label="ENDERECO" type="S" visible="true" useFooter="false" />
+              <field name="ATIVO" label="ATIVO" type="S" visible="true" useFooter="false" />
+              <field name="CODVOL" label="CODVOL" type="S" visible="true" useFooter="false" />
+              <field name="ESTMIN" label="ESTMIN" type="F" visible="true" useFooter="false" />
+              <field name="ESTMAX" label="ESTMAX" type="F" visible="true" useFooter="false" />
+              <field name="DTINICIO" label="DTINICIO" type="D" visible="true" useFooter="false" />
+            </metadata>
+            <refresh-details ui-list="grd_akslqlj">
+              <param id="ARG_CODEND">$CODEND</param>
+              <param id="ARG2_CODPROD">$CODPROD</param>
+            </refresh-details>
+          </grid>
+        </container>
+        <container orientacao="V" tamanhoRelativo="100">
+          <grid id="grd_akslqlj" useNewGrid="S">
+            <args>
+              <arg id="ARG_CODEND" type="integer" />
+              <arg id="ARG2_CODPROD" type="integer" />
+            </args>
+            <title><![CDATA[Saldo do Produto  :ARG2_CODPROD no Endereço :ARG_CODEND]]></title>
+            <expression type="sql" data-source="MGEDS"><![CDATA[SELECT 
+
+    WEST.CODEMP,
+    WEST.CODPROD,
+    WEST.CODEND,
+    WEST.ESTOQUE,
+    WEST.ENTRADASPEND,
+    WEST.SAIDASPEND
+
+FROM TGWEST WEST
+WHERE WEST.CODEND = :ARG_CODEND
+AND WEST.CODPROD = :ARG2_CODPROD]]></expression>
+            <metadata>
+              <field name="CODEMP" label="Emp." type="I" visible="true" useFooter="false" />
+              <field name="CODPROD" label="Prod." type="I" visible="true" useFooter="false" />
+              <field name="CODEND" label="End." type="I" visible="true" useFooter="false" />
+              <field name="ESTOQUE" label="Estoque" type="F" visible="true" useFooter="false" />
+              <field name="ENTRADASPEND" label="Entradas Pendentes" type="F" visible="true" useFooter="false" />
+              <field name="SAIDASPEND" label="Saidas Pendentes" type="F" visible="true" useFooter="false" />
+            </metadata>
+            <refresh-details ui-list="grd_akslqlt">
+              <param id="ARG2_CODPROD">$CODPROD</param>
+              <param id="ARG_CODEND">$CODEND</param>
+            </refresh-details>
+          </grid>
+        </container>
+      </container>
+      <container orientacao="H" tamanhoRelativo="33">
+        <container orientacao="V" tamanhoRelativo="50">
+          <grid id="grd_akslqlt" useNewGrid="S">
+            <args>
+              <arg id="ARG2_CODPROD" type="integer" />
+              <arg id="ARG_CODEND" type="integer" />
+            </args>
+            <title><![CDATA[Endereços de Armazenamentos disponíveis]]></title>
+            <expression type="sql" data-source="MGEDS"><![CDATA[SELECT
+    
+    ENDE.CODEND,
+    ENDE.DESCREND,
+    ENDE.ENDERECO,
+    ENDE.M3MAX,
+    ENDE.PESOMAX,
+    ENDE.ALTURA,
+    ENDE.LARGURA,
+    ENDE.PROFUNDIDADE,
+    ENDE.MULTIPROD
+    
+FROM TGWEND ENDE
+LEFT JOIN TGWEXP WEXP ON ENDE.CODEND = WEXP.CODEND
+
+WHERE WEXP.CODPROD IS NULL
+AND ENDE.ATIVO = 'S'
+AND ENDE.PICKING = 'S'
+AND ENDE.CODEMP = :EMPRESAS
+]]></expression>
+            <metadata>
+              <field name="CODEND" label="Cod. End." type="I" visible="true" useFooter="false" />
+              <field name="DESCREND" label="Desc. End." type="S" visible="true" useFooter="false" />
+              <field name="ENDERECO" label="Endereço" type="S" visible="true" useFooter="false" />
+              <field name="M3MAX" label="M3 Max" type="F" visible="true" useFooter="false" />
+              <field name="PESOMAX" label="Peso Máx" type="F" visible="true" useFooter="false" />
+              <field name="ALTURA" label="Altura" type="F" visible="true" useFooter="false" />
+              <field name="LARGURA" label="Largura" type="F" visible="true" useFooter="false" />
+              <field name="PROFUNDIDADE" label="Profundidade" type="F" visible="true" useFooter="false" />
+              <field name="MULTIPROD" label="É multiproduto ?" type="S" visible="true" useFooter="false" />
+            </metadata>
+          </grid>
+        </container>
+        <container orientacao="V" tamanhoRelativo="50">
+          <grid id="grd_ak1ekh1" useNewGrid="S">
+            <title><![CDATA[Prioridade de Armazenagem - Produtos Reservados]]></title>
+            <expression type="sql" data-source="MGEDS"><![CDATA[SELECT
+    ROW_NUMBER() OVER (ORDER BY SUM(R.QTDNEG) DESC, MIN(R.DHPRIORIDADE) ASC) AS RANKING,    
+    R.CODPROD,
+    PROD.DESCRPROD,
+    SUM(R.QTDNEG) AS TOTAL_QTDNEG,
+    MIN(R.DHPRIORIDADE) AS MIN_DHPRIORIDADE
+  
+FROM AD_GERENCRESERVA R
+INNER JOIN TGFPRO PROD ON R.CODPROD = PROD.CODPROD
+WHERE R.CODEMP = :EMPRESAS
+AND R.CODPROD IN (SELECT TGFITE.CODPROD FROM TGFITE WHERE TGFITE.NUNOTA = :NU)
+GROUP BY R.CODPROD, PROD.DESCRPROD
+ORDER BY RANKING
+]]></expression>
+            <metadata>
+              <field name="RANKING" label="Ranking Prioridade" type="I" visible="true" useFooter="false">
+                <formatter colorScale="tricolor">
+                  <minimum color="#FF0000" type="menor" />
+                  <medium color="#FFFF00" type="numero" value="0" />
+                  <maximum color="#00FF00" type="maior" />
+                </formatter>
+              </field>
+              <field name="CODPROD" label="Cód Produto" type="I" visible="true" useFooter="false" />
+              <field name="DESCRPROD" label="Produto" type="S" visible="true" useFooter="false" />
+              <field name="TOTAL_QTDNEG" label="Total Reservas" type="I" visible="true" useFooter="false" />
+              <field name="MIN_DHPRIORIDADE" label="DH Prioridade" type="T" visible="true" useFooter="false" />
+            </metadata>
+          </grid>
+        </container>
+      </container>
+    </container>
+  </level>
+</gadget></gadgetSS></dashboard>

@@ -71,7 +71,7 @@ BEGIN
                IF NVL(v_separation_count, 0) >= 1 THEN
                    -- Cria a mensagem de notificação para faturamento
                    SELECT 'A CONFERÊNCIA DO Nº ÚNICO: ' || NVL(cab.nunota, 0) || ' FOI CONCLUÍDA, PODE SEGUIR COM O FATURAMENTO.',
-                          NVL(cab.codus_u, 0)
+                          NVL(cab.codusu, 0)
                      INTO v_notification_message, v_user_id
                      FROM TGWSXN sxn 
                      INNER JOIN TGFCAB cab ON cab.nunota = sxn.nunota
@@ -91,7 +91,7 @@ BEGIN
            ELSE
                -- Notifica o conferente que há fichas pendentes
                SELECT 'O PEDIDO DE Nº ÚNICO: ' || NVL(cab.nunota, 0) || ' AINDA POSSUI SEPARAÇÕES PENDENTES.',
-                      NVL(cab.codus_u, 0)
+                      NVL(cab.codusu, 0)
                  INTO v_notification_message, v_user_id
                  FROM TGWSXN sxn 
                  INNER JOIN TGFCAB cab ON cab.nunota = sxn.nunota
@@ -123,7 +123,7 @@ BEGIN
                -- Cria a mensagem de notificação para faturamento
            
 				SELECT 'A CONFERÊNCIA DO Nº ÚNICO: ' || NVL(cab.nunota, 0) || ' FOI CONCLUÍDA, PODE SEGUIR COM O FATURAMENTO.',
-                      NVL(cab.codus_u, 0)
+                      NVL(cab.codusu, 0)
                  INTO v_notification_message, v_user_id
                  FROM TGWSXN sxn 
                  INNER JOIN TGFCAB cab ON cab.nunota = sxn.nunota

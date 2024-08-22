@@ -15,12 +15,19 @@ CREATE OR REPLACE PACKAGE SANKHYA.PKG_FATURAMENTOAUTOMATICO AS
     G_RELATORIOERRO         VARCHAR2(10 BYTE);
     G_RELATORIOFATURAMENTO  VARCHAR2(10 BYTE);
     G_GRUPOEMAIL            VARCHAR2(100 BYTE);
+    
+    P_CODEMP_DA_CAB         TGFCAB.CODEMP%TYPE;
 
     /* Carrega as configurações mais recentes para um CODEMP específico */
     PROCEDURE CARREGA_CONFIG_FATAUT(P_CODEMP IN NUMBER);
 
     /* RETORNA O CODIGO DA EMPRESA */
     FUNCTION GET_CODEMP_NUNOTA(
+        P_NUNOTA    IN NUMBER
+    ) RETURN NUMBER;
+    
+    /*  Retorna a Top usada na CAB */
+    FUNCTION GET_TOP_NUNOTA(
         P_NUNOTA    IN NUMBER
     ) RETURN NUMBER;
 
@@ -94,6 +101,8 @@ CREATE OR REPLACE PACKAGE BODY SANKHYA.PKG_FATURAMENTOAUTOMATICO AS
     G_RELATORIOFATURAMENTO  VARCHAR2(10 BYTE);
     G_GRUPOEMAIL            VARCHAR2(100 BYTE);
     
+    P_CODEMP_DA_CAB         TGFCAB.CODEMP%TYPE;
+    
     /**************************************************************************
     * Carrega as configurações mais recentes para um CODEMP específico
     ***************************************************************************/
@@ -138,6 +147,27 @@ CREATE OR REPLACE PACKAGE BODY SANKHYA.PKG_FATURAMENTOAUTOMATICO AS
         RETURN I_CODEMP;
     
     END GET_CODEMP_NUNOTA;
+    
+    /*  Retonar o código da TOP na CAB */
+    FUNCTION GET_TOP_NUNOTA(
+        P_NUNOTA    IN NUMBER
+    ) RETURN NUMBER IS
+    
+    I_CODTIPOPER TGFCAB.CODTIPOPER %TYPE;
+
+    
+    BEGIN
+    
+         -- Verifica se há exatamente um CODEMP correspondente ao NUNOTA
+        SELECT CODTIPOPER
+        INTO I_CODTIPOPER
+        FROM TGFCAB
+        WHERE NUNOTA = P_NUNOTA;
+        
+        RETURN I_CODTIPOPER;
+    
+    END GET_TOP_NUNOTA;
+    
 
     /************************************************************************** 
     * Insere registro no log de faturamento - Estrutura padrão
@@ -290,23 +320,78 @@ CREATE OR REPLACE PACKAGE BODY SANKHYA.PKG_FATURAMENTOAUTOMATICO AS
     ***************************************************************************/
     
     
-    /* Procedure que realiza o faturamento do pedido pela OS  */
+   
+    /* Procedure que realiza o faturamento do pedido pelo estoque  */
     PROCEDURE FATURAPELOESTOQUE(
         P_NUNOTA    IN NUMBER,
         P_RESULTADO OUT BOOLEAN
     ) IS
-    
+        
+        EMPRESA_UTLIZA_WMS               CHAR := 'N';
+        TOP_ESTA_HABILITADA_FATURAMENTO  BOOLEAN;
+        P_CODEMP_DA_CAB                  TGFCAB.CODEMP%TYPE;
+        P_TOP_DA_CAB                     TGFCAB.CODTIPOPER%TYPE;
+
     BEGIN
-    
-        SELECT 1 FROM DUAL;
-    
+        -- Busca o código da Empresa e TOP na CAB
+        P_CODEMP_DA_CAB := GET_CODEMP_NUNOTA(P_NUNOTA);
+        
+        /*********************************************************************************
+         Vamos seguir os seguintes passos:
+         
+         1 - Empresa utiliza WMS
+         2 - Existe alguma configuração de faturamento automatico ativo pra essa empresa
+         3 - A top utilizada no pedido, esta habilitada pra ser faturada automaticamente ?
+         4 - O tipo de negociação no pedido, esta habilitado para ser faturado ?
+         5 - O tipo de negociação é a vista? Existe liberação aprovada para esse cliente?
+         6 - Chama o faturamento automatico 
+        *********************************************************************************/
+        
+        
+
+
+        -- Verifica se a empresa utiliza WMS
+        STP_EMP_UTILIZAWMS_DCCO(P_CODEMP_DA_CAB, EMPRESA_UTLIZA_WMS);
+
+        IF EMPRESA_UTLIZA_WMS = 'N' THEN
+            P_RESULTADO := FALSE;
+            RETURN;
+        ELSE
+            -- Carrega configurações do faturamento automático
+            CARREGA_CONFIG_FATAUT(P_CODEMP_DA_CAB);
+            
+            -- Empresa está habilitada para utilizar o faturamento automático?
+            IF P_CODEMP_DA_CAB <> G_CODEMP  AND G_ATIVO <> 'SIM'  THEN
+                
+                P_RESULTADO := FALSE;
+                RETURN;
+            
+            ELSE  -- Empresa esta com configuração de faturamento automatico ativo.
+                
+                P_TOP_DA_CAB := GET_TOP_NUNOTA(P_NUNOTA);
+                -- Vamos verificar se a top utilizada esta habilitada pro faturamento automatico
+                CONSULTA_TOPPEDFATAUT(P_TOP_DA_CAB,P_CODEMP_DA_CAB,TOP_ESTA_HABILITADA_FATURAMENTO);
+                
+                IF TOP_ESTA_HABILITADA_FATURAMENTO <> TRUE THEN
+                    P_RESULTADO := FALSE;
+                    RETURN;
+                END IF;
+                
+            END IF;
+            
+            
+
+            P_RESULTADO := TRUE;
+        END IF;
+
+    EXCEPTION
+        WHEN OTHERS THEN
+            P_RESULTADO := FALSE;
+            RAISE;
     END FATURAPELOESTOQUE;
-    
-    
 
+    
 END PKG_FATURAMENTOAUTOMATICO;
-/
-
 /
 
 

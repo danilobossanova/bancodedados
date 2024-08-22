@@ -4,14 +4,21 @@ CREATE OR REPLACE TRIGGER SANKHYA.TRG_AFR_UPD_TGWSEP
    AFTER UPDATE
    ON SANKHYA.TGWSEP
    FOR EACH ROW
+
 DECLARE
-   v_situacao    CHAR(1);
-   v_separation_count      NUMBER(10);
-   v_incomplete_separation_count NUMBER(10);
-   v_notification_message  VARCHAR2(3000); -- Mensagem de notificação para faturamento
-   v_user_id     INT;                      -- ID do usuário que receberá a notificação
-   PRAGMA AUTONOMOUS_TRANSACTION;
+   
+   v_situacao    					CHAR(1);
+   v_separation_count      			NUMBER(10);
+   v_incomplete_separation_count 	NUMBER(10);
+   v_notification_message  			VARCHAR2(3000); -- Mensagem de notificação para faturamento
+   v_user_id     					INT;            -- ID do usuário que receberá a notificação
+  
+
+  PRAGMA AUTONOMOUS_TRANSACTION;
+   
 BEGIN
+
+
    IF stp_get_atualizando THEN
       RETURN;
    END IF;
@@ -27,7 +34,10 @@ BEGIN
    /********************************************************************************************************************
    
 				REFATORADO POR DANILO FERNANDO EM 21/08/2024 --- USADO NO FATURAMENTO AUTOMATICO
-   
+				
+				Situacao = 5 --> Conferencia validada
+				Situacao = 6 --> Concluída
+				
    *********************************************************************************************************************/
    
   
@@ -97,9 +107,10 @@ BEGIN
        END IF;
 
    ELSIF v_separation_count = 1 THEN
-       -- Se houver apenas uma separação e a situação mudou para 5 (Concluída)
+       
+	   -- Se houver apenas uma separação e a situação mudou para 5 (Concluída)
        IF UPDATING('SITUACAO') AND :NEW.situacao = '5' AND :OLD.situacao <> '5' THEN
-           -- Verifica se existe pelo menos uma separação válida
+	   
            SELECT NVL(COUNT(1), 0)
              INTO v_separation_count
              FROM TGWSXN sxn 
@@ -108,8 +119,10 @@ BEGIN
               AND ROWNUM = 1;
 
            IF NVL(v_separation_count, 0) >= 1 THEN
+		   
                -- Cria a mensagem de notificação para faturamento
-               SELECT 'A CONFERÊNCIA DO Nº ÚNICO: ' || NVL(cab.nunota, 0) || ' FOI CONCLUÍDA, PODE SEGUIR COM O FATURAMENTO.',
+           
+				SELECT 'A CONFERÊNCIA DO Nº ÚNICO: ' || NVL(cab.nunota, 0) || ' FOI CONCLUÍDA, PODE SEGUIR COM O FATURAMENTO.',
                       NVL(cab.codus_u, 0)
                  INTO v_notification_message, v_user_id
                  FROM TGWSXN sxn 
@@ -120,11 +133,13 @@ BEGIN
                IF NVL(v_user_id, 0) > 0 THEN
                    send_aviso2(v_user_id, v_notification_message, '', 0);
                    send_aviso2(v_user_id, v_notification_message, '', 1);
+				   
                    send_aviso2(68, v_notification_message, '', 1); -- Notifica um usuário adicional
                    COMMIT;
 
                    -- Chama a procedure de faturamento após todas as fichas estarem concluídas
                    --PKG_FATURAMENTOAUTOMATICO.FATURAPELOESTOQUE(:NEW.nunota);
+				   
                END IF;
            END IF;
        END IF;

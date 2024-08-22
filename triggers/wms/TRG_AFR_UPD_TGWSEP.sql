@@ -12,6 +12,8 @@ DECLARE
    v_incomplete_separation_count 	NUMBER(10);
    v_notification_message  			VARCHAR2(3000); -- Mensagem de notificação para faturamento
    v_user_id     					INT;            -- ID do usuário que receberá a notificação
+   
+   P_RESULTADO                      BOOLEAN;
   
 
   PRAGMA AUTONOMOUS_TRANSACTION;
@@ -49,6 +51,7 @@ BEGIN
     WHERE sxn.nunota = :NEW.nunota OR sxn.nunota = :OLD.nunota;
 
    IF v_separation_count >= 2 THEN
+       
        -- Verifica se existem separações incompletas (situações diferentes de 5 e 6)
        SELECT NVL(COUNT(1), 0)
          INTO v_incomplete_separation_count
@@ -59,7 +62,9 @@ BEGIN
           AND (sep.situacao <> '5' AND sep.situacao <> '6');
        
        IF UPDATING('SITUACAO') THEN
+       
            IF NVL(v_incomplete_separation_count, 0) = 0 THEN
+               
                -- Verifica se existe pelo menos uma separação válida
                SELECT NVL(COUNT(1), 0)
                  INTO v_separation_count
@@ -69,6 +74,7 @@ BEGIN
                   AND ROWNUM = 1;
 
                IF NVL(v_separation_count, 0) >= 1 THEN
+               
                    -- Cria a mensagem de notificação para faturamento
                    SELECT 'A CONFERÊNCIA DO Nº ÚNICO: ' || NVL(cab.nunota, 0) || ' FOI CONCLUÍDA, PODE SEGUIR COM O FATURAMENTO.',
                           NVL(cab.codusu, 0)
@@ -81,15 +87,19 @@ BEGIN
                    IF NVL(v_user_id, 0) > 0 THEN
                        send_aviso2(v_user_id, v_notification_message, '', 0);
                        send_aviso2(v_user_id, v_notification_message, '', 1);
-                       send_aviso2(324, v_notification_message, '', 1); -- Notifica um usuário adicional
+                       send_aviso2(68, v_notification_message, '', 1); -- Notifica um usuário adicional
                        COMMIT;
 
                        -- Chama a procedure de faturamento após todas as fichas estarem concluídas
-                       --PKG_FATURAMENTOAUTOMATICO.FATURAPELOESTOQUE(:NEW.nunota);
+                       PKG_FATURAMENTOAUTOMATICO.FATURAPELOESTOQUE(:NEW.nunota,P_RESULTADO);
+                       
                    END IF;
                END IF;
+               
            ELSE
+               
                -- Notifica o conferente que há fichas pendentes
+               
                SELECT 'O PEDIDO DE Nº ÚNICO: ' || NVL(cab.nunota, 0) || ' AINDA POSSUI SEPARAÇÕES PENDENTES.',
                       NVL(cab.codusu, 0)
                  INTO v_notification_message, v_user_id
@@ -98,10 +108,12 @@ BEGIN
                 WHERE sxn.nuseparacao = :NEW.nuseparacao AND ROWNUM = 1;
 
                IF NVL(v_user_id, 0) > 0 THEN
+               
                    send_aviso2(v_user_id, v_notification_message, '', 0);
                    send_aviso2(v_user_id, v_notification_message, '', 1);
                    send_aviso2(68, v_notification_message, '', 1); -- Notifica um usuário adicional
                    COMMIT;
+                   
                END IF;
            END IF;
        END IF;
@@ -131,6 +143,7 @@ BEGIN
 
                -- Envia a notificação para o usuário responsável
                IF NVL(v_user_id, 0) > 0 THEN
+               
                    send_aviso2(v_user_id, v_notification_message, '', 0);
                    send_aviso2(v_user_id, v_notification_message, '', 1);
 				   
@@ -138,7 +151,7 @@ BEGIN
                    COMMIT;
 
                    -- Chama a procedure de faturamento após todas as fichas estarem concluídas
-                   --PKG_FATURAMENTOAUTOMATICO.FATURAPELOESTOQUE(:NEW.nunota);
+                   PKG_FATURAMENTOAUTOMATICO.FATURAPELOESTOQUE(:NEW.nunota,P_RESULTADO);
 				   
                END IF;
            END IF;

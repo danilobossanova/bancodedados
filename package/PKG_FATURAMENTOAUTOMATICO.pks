@@ -356,6 +356,8 @@ CREATE OR REPLACE PACKAGE BODY SANKHYA.PKG_FATURAMENTOAUTOMATICO AS
         IF EMPRESA_UTLIZA_WMS = 'N' THEN
             P_RESULTADO := FALSE;
             RETURN;
+            
+            
         ELSE
             -- Carrega configurações do faturamento automático
             CARREGA_CONFIG_FATAUT(P_CODEMP_DA_CAB);

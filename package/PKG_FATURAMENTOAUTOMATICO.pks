@@ -16,10 +16,16 @@ CREATE OR REPLACE PACKAGE SANKHYA.PKG_FATURAMENTOAUTOMATICO AS
     G_RELATORIOFATURAMENTO  VARCHAR2(10 BYTE);
     G_GRUPOEMAIL            VARCHAR2(100 BYTE);
     
+    /* Variaveis globais com dados da NUNOTA da CAB */
     P_CODEMP_DA_CAB         TGFCAB.CODEMP%TYPE;
+    P_CODTIPVENDA_DA_CAB    TGFCAB.CODTIPVENDA%TYPE;
+    P_CODTIPOPER_DA_CAB     TGFCAB.CODTIPOPER%TYPE;
 
     /* Carrega as configurações mais recentes para um CODEMP específico */
     PROCEDURE CARREGA_CONFIG_FATAUT(P_CODEMP IN NUMBER);
+
+    /* BUSCA DADOS DA NUNOTA */
+    PROCEDURE GET_DADOS_NUNOTA(P_NUNOTA    IN TGFCAB.NUNOTA%TYPE);
 
     /* RETORNA O CODIGO DA EMPRESA */
     FUNCTION GET_CODEMP_NUNOTA(
@@ -29,6 +35,11 @@ CREATE OR REPLACE PACKAGE SANKHYA.PKG_FATURAMENTOAUTOMATICO AS
     /*  Retorna a Top usada na CAB */
     FUNCTION GET_TOP_NUNOTA(
         P_NUNOTA    IN NUMBER
+    ) RETURN NUMBER;
+
+    /* Retona o tipo de Negociacao na CAB */
+    FUNCTION GET_TIPONEGOCIACAO_NUNOTA(
+        P_NUNOTA IN NUMBER
     ) RETURN NUMBER;
 
     /* Insere o log de faturamento  */
@@ -89,19 +100,10 @@ END PKG_FATURAMENTOAUTOMATICO;
 *******************************************************************************/
 
 CREATE OR REPLACE PACKAGE BODY SANKHYA.PKG_FATURAMENTOAUTOMATICO AS
-
-    /* Variáveis globais para armazenar as configurações */
-    G_NUFAT                 NUMBER(10);
-    G_CODEMP                NUMBER(10);
-    G_ATIVO                 VARCHAR2(10 BYTE);
-    G_SERIE                 NUMBER(10);
-    G_SITUACAOWMS           NUMBER(10);
-    G_DTHRULTFATURAMENTO    FLOAT(126);
-    G_RELATORIOERRO         VARCHAR2(10 BYTE);
-    G_RELATORIOFATURAMENTO  VARCHAR2(10 BYTE);
-    G_GRUPOEMAIL            VARCHAR2(100 BYTE);
     
-    P_CODEMP_DA_CAB         TGFCAB.CODEMP%TYPE;
+    /*P_CODEMP_DA_CAB         TGFCAB.CODEMP%TYPE;
+    P_CODTIPVENDA_DA_CAB    TGFCAB.CODTIPVENDA%TYPE;
+    P_CODTIPOPER_DA_CAB     TGFCAB.CODTIPOPER%TYPE;*/
     
     /**************************************************************************
     * Carrega as configurações mais recentes para um CODEMP específico
@@ -128,7 +130,24 @@ CREATE OR REPLACE PACKAGE BODY SANKHYA.PKG_FATURAMENTOAUTOMATICO AS
             RAISE;
     END CARREGA_CONFIG_FATAUT;
     
-
+    /* Pega os dados do NUNOTA na CAB */
+    PROCEDURE GET_DADOS_NUNOTA(
+        P_NUNOTA    IN TGFCAB.NUNOTA%TYPE
+    ) IS
+    
+    BEGIN
+    
+        SELECT CODEMP, CODTIPOPER, CODTIPVENDA
+        INTO P_CODEMP_DA_CAB, P_CODTIPOPER_DA_CAB, P_CODTIPVENDA_DA_CAB
+        FROM TGFCAB
+        WHERE NUNOTA = P_NUNOTA;
+    
+    
+    END GET_DADOS_NUNOTA;
+    
+    
+    
+    /* Retorna o código da empresa na cab */
     FUNCTION GET_CODEMP_NUNOTA(
         P_NUNOTA    IN NUMBER
     ) RETURN NUMBER IS
@@ -168,6 +187,23 @@ CREATE OR REPLACE PACKAGE BODY SANKHYA.PKG_FATURAMENTOAUTOMATICO AS
     
     END GET_TOP_NUNOTA;
     
+    /* RETORNA O TIPO DE NEGOCIACAO NA CAB */
+    FUNCTION GET_TIPONEGOCIACAO_NUNOTA(
+        P_NUNOTA IN NUMBER
+    ) RETURN NUMBER IS
+    
+        I_TIPONEGOCIACAO_NA_CAB TGFCAB.CODTIPVENDA%TYPE;
+
+    BEGIN
+    
+        SELECT CODTIPVENDA
+        INTO I_TIPONEGOCIACAO_NA_CAB
+        FROM TGFCAB
+        WHERE NUNOTA = P_NUNOTA;
+        
+        RETURN I_TIPONEGOCIACAO_NA_CAB;
+    
+    END GET_TIPONEGOCIACAO_NUNOTA;
 
     /************************************************************************** 
     * Insere registro no log de faturamento - Estrutura padrão
@@ -329,12 +365,13 @@ CREATE OR REPLACE PACKAGE BODY SANKHYA.PKG_FATURAMENTOAUTOMATICO AS
         
         EMPRESA_UTLIZA_WMS               CHAR := 'N';
         TOP_ESTA_HABILITADA_FATURAMENTO  BOOLEAN;
-        P_CODEMP_DA_CAB                  TGFCAB.CODEMP%TYPE;
-        P_TOP_DA_CAB                     TGFCAB.CODTIPOPER%TYPE;
+        TIPO_DE_VENDA_A_PRAZO            BOOLEAN;
 
     BEGIN
-        -- Busca o código da Empresa e TOP na CAB
-        P_CODEMP_DA_CAB := GET_CODEMP_NUNOTA(P_NUNOTA);
+
+        -- Busca o código da Empresa, Tipo de Negociacao e TOP na CAB
+        GET_DADOS_NUNOTA(P_NUNOTA);
+
         
         /*********************************************************************************
          Vamos seguir os seguintes passos:
@@ -350,40 +387,75 @@ CREATE OR REPLACE PACKAGE BODY SANKHYA.PKG_FATURAMENTOAUTOMATICO AS
         
 
 
-        -- Verifica se a empresa utiliza WMS
+        -- Verifica se a empresa utiliza WMS [1]
         STP_EMP_UTILIZAWMS_DCCO(P_CODEMP_DA_CAB, EMPRESA_UTLIZA_WMS);
 
         IF EMPRESA_UTLIZA_WMS = 'N' THEN
+        
+            send_aviso2(68, 'Empresa não utliza wms ' || P_CODEMP_DA_CAB , '', 1);
+            COMMIT;
+        
             P_RESULTADO := FALSE;
             RETURN;
             
             
         ELSE
+        
             -- Carrega configurações do faturamento automático
             CARREGA_CONFIG_FATAUT(P_CODEMP_DA_CAB);
-            
-            -- Empresa está habilitada para utilizar o faturamento automático?
+        
+
+    
+            -- Empresa está habilitada para utilizar o faturamento automático? [2]
             IF P_CODEMP_DA_CAB <> G_CODEMP  AND G_ATIVO <> 'SIM'  THEN
+                
+                send_aviso2(68, 'Empresa não esta habilitada para utilizar faturamento automatico ' || P_CODEMP_DA_CAB , '', 1);
+                COMMIT;
                 
                 P_RESULTADO := FALSE;
                 RETURN;
             
             ELSE  -- Empresa esta com configuração de faturamento automatico ativo.
                 
-                P_TOP_DA_CAB := GET_TOP_NUNOTA(P_NUNOTA);
-                -- Vamos verificar se a top utilizada esta habilitada pro faturamento automatico
-                CONSULTA_TOPPEDFATAUT(P_TOP_DA_CAB,P_CODEMP_DA_CAB,TOP_ESTA_HABILITADA_FATURAMENTO);
+                
+                -- Vamos verificar se a top utilizada esta habilitada pro faturamento automatico [3]
+                CONSULTA_TOPPEDFATAUT(P_CODTIPOPER_DA_CAB ,P_CODEMP_DA_CAB,TOP_ESTA_HABILITADA_FATURAMENTO);
                 
                 IF TOP_ESTA_HABILITADA_FATURAMENTO <> TRUE THEN
+                
+                    send_aviso2(68, 'Top nao esta habilitada para faturamento ' || P_CODTIPOPER_DA_CAB , '', 1);
+                    COMMIT;
+                
                     P_RESULTADO := FALSE;
                     RETURN;
+                
+                ELSE
+                
+                    -- Verifica o tipo de negociação
+                    CONSULTA_TIPNEGOFATDCCO(P_CODTIPVENDA_DA_CAB, P_CODEMP_DA_CAB,TIPO_DE_VENDA_A_PRAZO);
+                    
+                    IF TIPO_DE_VENDA_A_PRAZO <> TRUE THEN
+                        
+                        send_aviso2(68, 'O tipo de Negociacao nao e a prazo ' || P_CODTIPVENDA_DA_CAB , '', 1);
+                        COMMIT;
+                    
+                    ELSE
+
+                        send_aviso2(68, 'O Tipo de Negociacao e a prazo ' || P_CODTIPVENDA_DA_CAB , '', 1);
+                        COMMIT;
+
+                    END IF;
+                    
+                    
+                    P_RESULTADO := FALSE;
                 END IF;
                 
             END IF;
             
-            
-
-            P_RESULTADO := TRUE;
+                    send_aviso2(68, 'Seguiu o fluxo', '', 1);
+                    COMMIT;
+                    
+                    P_RESULTADO := TRUE;
         END IF;
 
     EXCEPTION

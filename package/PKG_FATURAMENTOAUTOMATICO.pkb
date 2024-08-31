@@ -261,200 +261,144 @@ CREATE OR REPLACE PACKAGE BODY SANKHYA.PKG_FATURAMENTOAUTOMATICO AS
        Usada na trigger que monitora a tgwsep 
     */
     PROCEDURE FATURAPELOESTOQUE(
-        P_NUNOTA    IN NUMBER,
-        P_RESULTADO OUT BOOLEAN
-    ) IS
-        
-        EMPRESA_UTLIZA_WMS               CHAR := 'N';
-        TOP_ESTA_HABILITADA_FATURAMENTO  BOOLEAN;
-        TIPO_DE_VENDA_A_PRAZO            BOOLEAN;
-        TIPO_DE_VENDA_A_VISTA            BOOLEAN;
-        CLIENTE_TEM_LIMITE_DISPONIVEL    BOOLEAN;
-        P_STATUS                         NUMBER;
-        TA_LIBERADO_A_VISTA              BOOLEAN;
-        P_RETURN                         VARCHAR2(255);
+    P_NUNOTA    IN NUMBER,
+    P_RESULTADO OUT BOOLEAN
+) IS
+    EMPRESA_UTILIZA_WMS              VARCHAR2(1) := 'N';  -- Substituindo CHAR por VARCHAR2
+    TOP_HABILITADA_FATURAMENTO        BOOLEAN;
+    VENDA_A_PRAZO                     BOOLEAN;
+    VENDA_A_VISTA                     BOOLEAN;
+    CLIENTE_TEM_LIMITE                BOOLEAN;
+    P_STATUS                          NUMBER;
+    LIBERADO_VENDA_A_VISTA            BOOLEAN;
+    P_RETURN                          VARCHAR2(255);
 
-    BEGIN
+BEGIN
+    -- Busca o código da Empresa, Tipo de Negociação e TOP na CAB
+    GET_DADOS_NUNOTA(P_NUNOTA);
 
-        -- Busca o código da Empresa, Tipo de Negociacao e TOP na CAB
-        GET_DADOS_NUNOTA(P_NUNOTA);
+    /*********************************************************************************
+     Vamos seguir os seguintes passos:
+     
+     1 - Verifica se a empresa utiliza WMS
+     2 - Verifica se existe alguma configuração de faturamento automático ativo para esta empresa
+     3 - Verifica se a TOP utilizada no pedido está habilitada para ser faturada automaticamente
+     4 - Verifica se o tipo de negociação no pedido está habilitado para ser faturado
+     4.1 - Verifica se o cliente tem limite disponível para faturamento a prazo
+     5 - Verifica se o tipo de negociação é à vista e se há liberação aprovada para o cliente
+     6 - Chama o faturamento automático 
+     7 - Atualiza a data do último faturamento automático
+    *********************************************************************************/
 
-        
-        /*********************************************************************************
-         Vamos seguir os seguintes passos:
-         
-         1 - Empresa utiliza WMS
-         2 - Existe alguma configuração de faturamento automatico ativo pra essa empresa
-         3 - A top utilizada no pedido, esta habilitada pra ser faturada automaticamente ?
-         4 - O tipo de negociação no pedido, esta habilitado para ser faturado ?
-         4.1 - O Cliente tem limite disponivel para fazer o faturamento a prazo ?
-         5 - O tipo de negociação é a vista? Existe liberação aprovada para esse cliente?
-         6 - Chama o faturamento automatico 
-         7 - Atualiza a data do ultimo faturamento automatico
-        *********************************************************************************/
-        
-        
+    -- Verifica se a empresa utiliza WMS [1]
+    STP_EMP_UTILIZAWMS_DCCO(P_CODEMP_DA_CAB, EMPRESA_UTILIZA_WMS);
 
+    IF EMPRESA_UTILIZA_WMS = 'N' THEN
+        SEND_NOTIFICATION(68, NULL, 'Empresa não utiliza WMS', 'Empresa: ' || P_CODEMP_DA_CAB, 1);
+        P_RESULTADO := FALSE;
+        RETURN;
+    END IF;
 
-        -- Verifica se a empresa utiliza WMS [1]
-        STP_EMP_UTILIZAWMS_DCCO(P_CODEMP_DA_CAB, EMPRESA_UTLIZA_WMS);
+    -- Carrega as configurações do faturamento automático
+    CARREGA_CONFIG_FATAUT(P_CODEMP_DA_CAB);
 
-        IF EMPRESA_UTLIZA_WMS = 'N' THEN
-        
-            send_aviso2(68, 'Empresa não utliza wms ' || P_CODEMP_DA_CAB , '', 1);
-            COMMIT;
-        
+    -- Verifica se a empresa está habilitada para faturamento automático [2]
+    IF P_CODEMP_DA_CAB <> G_CODEMP OR G_ATIVO <> 'SIM' THEN
+        SEND_NOTIFICATION(68, NULL, 'Empresa não habilitada para faturamento automático', 'Empresa: ' || P_CODEMP_DA_CAB, 1);
+        P_RESULTADO := FALSE;
+        RETURN;
+    END IF;
+
+    -- Verifica se a TOP utilizada está habilitada para faturamento automático [3]
+    CONSULTA_TOPPEDFATAUT(P_CODTIPOPER_DA_CAB, P_CODEMP_DA_CAB, TOP_HABILITADA_FATURAMENTO);
+    
+    IF NOT TOP_HABILITADA_FATURAMENTO THEN
+        SEND_NOTIFICATION(68, NULL, 'TOP não habilitada para faturamento', 'TOP: ' || P_CODTIPOPER_DA_CAB, 1);
+        P_RESULTADO := FALSE;
+        RETURN;
+    END IF;
+
+    -- Verifica o tipo de negociação [4]
+    CONSULTA_TIPNEGOFATDCCO(P_CODTIPVENDA_DA_CAB, P_CODEMP_DA_CAB, VENDA_A_PRAZO);
+
+    IF VENDA_A_PRAZO = TRUE THEN
+        -- Verifica se o cliente tem limite de crédito [4.1]
+        CLIENTE_TEM_LIMITE_CREDITO(P_CODPARC_DA_CAB, P_VALORNOTA_DA_CAB, CLIENTE_TEM_LIMITE);
+
+        IF CLIENTE_TEM_LIMITE = FALSE THEN
+            SEND_NOTIFICATION(P_CODUSU_DA_CAB, NULL, 'Faturamento a Prazo - Limite Insuficiente', 
+            'O cliente do pedido <b>' || P_NUNOTA || '</b> não tem limite para ser faturado automaticamente.', -1);
             P_RESULTADO := FALSE;
             RETURN;
-            
-            
-        ELSE
-        
-            -- Carrega configurações do faturamento automático
-            CARREGA_CONFIG_FATAUT(P_CODEMP_DA_CAB);
-        
+        END IF;
 
+    ELSE
     
-            -- Empresa está habilitada para utilizar o faturamento automático? [2]
-            IF P_CODEMP_DA_CAB <> G_CODEMP  AND G_ATIVO <> 'SIM'  THEN
+        -- Verifica se a venda é à vista [5]
+        CONSULTA_TIPNEGOFATAVISTADCCO(P_CODTIPVENDA_DA_CAB, P_CODEMP_DA_CAB, VENDA_A_VISTA);
+
+        IF VENDA_A_VISTA = TRUE THEN
+        
+            -- Verifica se há liberação para venda à vista
+            TEM_LIBERACAO(P_NUNOTA, LIBERADO_VENDA_A_VISTA);
+            
+            IF LIBERADO_VENDA_A_VISTA = FALSE THEN
+            
+                -- Notifica financeiro e vendedor que existe liberacoes pendentes[5.1]
+                SEND_NOTIFICATION(NULL, 9, 'Liberação Pendente - Venda à Vista', 
+                'Pedido com pagamento à vista|pix|cartao|debito|deposito aguardando liberação. NU: ' || P_NUNOTA, -1);
                 
-                send_aviso2(68, 'Empresa não esta habilitada para utilizar faturamento automatico ' || P_CODEMP_DA_CAB , '', 1);
-                COMMIT;
+                SEND_NOTIFICATION(NULL, 10, 'Liberação Pendente - Venda à Vista', 
+                'Pedido com pagamento à vista|pix|cartao|debito|deposito aguardando liberação. NU: ' || P_NUNOTA, 3);
+                
+                SEND_NOTIFICATION(NULL, 12, 'Liberação Pendente - Venda à Vista', 
+                'Pedido com pagamento à vista|pix|cartao|debito|deposito aguardando liberação. NU: ' || P_NUNOTA, 1);
+                
+                SEND_NOTIFICATION(NULL, 26, 'Liberação Pendente - Venda à Vista', 
+                'Pedido com pagamento à vista|pix|cartao|debito|deposito aguardando liberação. NU: ' || P_NUNOTA, 1);
+                
+                SEND_NOTIFICATION(P_CODUSU_DA_CAB, NULL, 'Liberação Pendente - Venda à Vista', 
+                'Pedido com pagamento à vista|pix|cartao|debito|deposito aguardando liberação. NU: ' || P_NUNOTA, -1); -- Vendedor
+                
                 
                 P_RESULTADO := FALSE;
                 RETURN;
+                
+            END IF;
+
+        ELSE
+        
+            -- Tipo de negociação não configurado para faturamento automático
+            SEND_NOTIFICATION(P_CODUSU_DA_CAB, NULL, 'Faturamento Automático Não Permitido',
+            'Tipo de negociação selecionado para o pedido ' || P_NUNOTA || ' não permite faturamento automático.', -1);
             
-            ELSE  -- Empresa esta com configuração de faturamento automatico ativo.
-                
-                
-                -- Vamos verificar se a top utilizada esta habilitada pro faturamento automatico [3]
-                CONSULTA_TOPPEDFATAUT(P_CODTIPOPER_DA_CAB ,P_CODEMP_DA_CAB,TOP_ESTA_HABILITADA_FATURAMENTO);
-                
-                IF TOP_ESTA_HABILITADA_FATURAMENTO <> TRUE THEN
-                
-                    send_aviso2(68, 'Top nao esta habilitada para faturamento ' || P_CODTIPOPER_DA_CAB , '', 1);
-                    COMMIT;
-                
-                    P_RESULTADO := FALSE;
-                    RETURN;
-                
-                ELSE -- tOP ESTA HABILITADA PRA FATURAR AUTOMATICAMENTE [1729,1788]
-                
-                    -- Verifica o tipo de negociação [4]
-                    CONSULTA_TIPNEGOFATDCCO(P_CODTIPVENDA_DA_CAB, P_CODEMP_DA_CAB,TIPO_DE_VENDA_A_PRAZO);
-                    
-                    
-                    -- Se a venda for a prazo
-                    IF TIPO_DE_VENDA_A_PRAZO = TRUE THEN
-                        
-                        -- Verifica se o cliente tem limite [4.1]
-                        CLIENTE_TEM_LIMITE_CREDITO(P_CODPARC_DA_CAB,P_VALORNOTA_DA_CAB,CLIENTE_TEM_LIMITE_DISPONIVEL);
-                        
-                            IF CLIENTE_TEM_LIMITE_DISPONIVEL = TRUE THEN
-                            
-                                
-                                -- CHAMA O FATURAMENTO __ 1 FATURAMENTO POR PEDIDO
-                                P_STATUS := SANKHYA.PKG_API_DCCO.FC_FATURAR_ESTOQUE(P_NUNOTA,1830, P_RETURN);
-                                
-                                
-                                IF P_STATUS <> 1 THEN
-                                
-                                    P_RESULTADO := FALSE;
-                                    RETURN;
-                                    -- TODO: GERAR LOG DO FATURAMENTO
-                                    
-                                ELSE
-                                    
-                                    P_RESULTADO := TRUE;
-                                    RETURN;
-                                    -- TODO: GERAR LOG DO FATURAMENTO
-                                    
-                                END IF;    
-                                
-                            ELSE
-                            
-                                -- Notifica o vendedor
-                                 
-                                SEND_NOTIFICATION(P_CODUSU_DA_CAB, NULL, 'Liberação - Pagamento A Prazo',' O cliente do pedido <b>'   || P_NUNOTA  || '</b> não tem limite para ser faturado automaticamente.' ,-1);
-                                COMMIT;
-                            
-                                -- TODO: Lançar log.
-
-                                P_RESULTADO := FALSE;
-                                RETURN;
-                                
-                            END IF;
-                        
-                    
-                    ELSE -- vENDA É A VISTA OU É UM TIPO DE NEGOCIACAO QUE NÃO TÁ MARCADO
-                    
-                        --VERIFICA SE A VENDA É A VISTA
-                        CONSULTA_TIPNEGOFATAVISTADCCO(P_CODTIPVENDA_DA_CAB, P_CODEMP_DA_CAB,TIPO_DE_VENDA_A_VISTA);
-                        IF TIPO_DE_VENDA_A_VISTA = TRUE THEN
-                        
-                            --verifica se existe limite liberado EVENTO 1001 para essa NU
-                            TEM_LIBERACAO(P_NUNOTA,TA_LIBERADO_A_VISTA);
-                            IF TA_LIBERADO_A_VISTA = TRUE THEN
-                            
-                                
-                                -- CHAMA O FATURAMENTO __ 1 FATURAMENTO POR PEDIDO
-                                P_STATUS := SANKHYA.PKG_API_DCCO.FC_FATURAR_ESTOQUE(P_NUNOTA,1830, P_RETURN);
-                                
-                                
-                                IF P_STATUS <> 0 THEN
-                                
-                                    P_RESULTADO := TRUE;
-                                    RETURN;
-                                    -- TODO: GERAR LOG DO FATURAMENTO
-                                    
-                                ELSE
-                                
-                                    
-                                     SEND_NOTIFICATION(null, 9, 'Liberação - Pagamento A vista','Um pedido com forma de pagamento a vista aguarda liberação. NU do pedido: ' || P_NUNOTA ,-1);
-                                     SEND_NOTIFICATION(P_CODUSU_DA_CAB, NULL, 'Liberação - Pagamento A vista','Um pedido com forma de pagamento a vista aguarda liberação do financeiro. NU do pedido: ' || P_NUNOTA ,-1);
-                                     SEND_NOTIFICATION(68, null, 'Erro ao faturar','Mensagem:  ' || P_RETURN || ' - Pedido: '  || P_NUNOTA ,1);
-                                     COMMIT;
-                                    
-                                    P_RESULTADO := FALSE;
-                                    RETURN;
-                                    -- TODO: GERAR LOG DO FATURAMENTO
-                                    
-                                END IF;   
-                            
-                            END IF;
-                        
-                        ELSE -- NAO A VISTA E NEM A PRAZO. É UM TIPO NÃO CONFIGURADO
-
-                            -- NOTIFICA O VENDEDOR QUE ELE TEM 2 DIAS UTEIS PRA FAZER ESSA FATURAMENTO
-                            SEND_NOTIFICATION(P_CODUSU_DA_CAB, NULL, 'Faturamento Automatico','Você escolheu um Tipo de Negociação que não pode ser faturado automaticamente para o pedido:  ' || P_NUNOTA ,-1);
-                            commit;
-
-                            -- TODO: GERAR LOG DO FATURAMENTO
-                            
-                            P_RESULTADO := FALSE;
-                            RETURN;
-
-                        END IF; -- <- Tipo de Negociacao a Vista
-
-                       
-                    END IF; -- <- VERIFICA O TIPO DE NEGOCIACAO [A VISTA OU A PRAZO]
-                    
-                    
-                    P_RESULTADO := FALSE;
-                    RETURN;
-                    
-                END IF; -- <- VERIFICA SE TOP E 1729 OU 1788
-                
-            END IF; -- <- Empresa não esta habilitada.. nao tem configuração ativa
             
-                --P_RESULTADO := TRUE;
-        END IF; -- <-- Empresa não utiliza wms
-
-    EXCEPTION
-        WHEN OTHERS THEN
+            
             P_RESULTADO := FALSE;
-            --RAISE;
-    END FATURAPELOESTOQUE;
+            RETURN;
+            
+        END IF;
+    END IF;
+
+    -- Chama o faturamento automático [6]
+    P_STATUS := SANKHYA.PKG_API_DCCO.FC_FATURAR_ESTOQUE(P_NUNOTA, 1830, P_RETURN);
+
+    IF P_STATUS <> 1 THEN
+        SEND_NOTIFICATION(68, NULL, 'Erro ao Faturar', 'Erro: ' || P_RETURN || ' - Pedido: ' || P_NUNOTA, 1);
+        P_RESULTADO := FALSE;
+        RETURN;
+    END IF;
+
+    -- Atualiza o resultado e o status do faturamento [7]
+    P_RESULTADO := TRUE;
+
+EXCEPTION
+    WHEN OTHERS THEN
+        -- Captura o erro e realiza o log apropriado
+        SEND_NOTIFICATION(68, NULL, 'Erro inesperado', 'Erro ao processar faturamento do pedido ' || P_NUNOTA || '. Detalhes: ' || SQLERRM, 1);
+        P_RESULTADO := FALSE;
+END FATURAPELOESTOQUE;
+
 
     PROCEDURE CLIENTE_TEM_LIMITE_CREDITO(
         P_CODPAR        IN NUMBER,

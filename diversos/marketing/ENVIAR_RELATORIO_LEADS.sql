@@ -2,10 +2,10 @@ CREATE OR REPLACE PROCEDURE ENVIAR_RELATORIO_LEADS AS
     v_gerente       VARCHAR2(100);
     v_email_destino VARCHAR2(100);
     v_assunto       VARCHAR2(200);
-    v_mensagem      CLOB;
     v_count         NUMBER;
     v_count_atrasados NUMBER;
     v_relatorio     CLOB;
+    v_link_contato  VARCHAR2(400);  -- Para construir o link HTML
 BEGIN
     -- Cursor para percorrer os gerentes distintos e seus respectivos emails
     FOR gerente_rec IN (
@@ -30,13 +30,16 @@ BEGIN
 
         -- Consulta os leads do gerente e acumula as informações no relatório
         FOR lead_rec IN (
-            SELECT DATA_PREVISTA_RETORNO, '<a href="' || URL || '">' || NOME_CONTATO || ' - ' || CIDADE  ||'</a>' AS LINKCONTATO, SITUACAO
+            SELECT DATA_PREVISTA_RETORNO, URL, NOME_CONTATO, CIDADE, SITUACAO
             FROM VW_LEADS_AB_COM_INFORMACOES
             WHERE GERENTE = v_gerente
         ) LOOP
+            -- Constrói o link HTML
+            v_link_contato := '<a href="' || lead_rec.URL || '">' || lead_rec.NOME_CONTATO || ' - ' || lead_rec.CIDADE || '</a>';
+
             -- Acumula as informações do lead no relatório
             v_relatorio := v_relatorio || lead_rec.DATA_PREVISTA_RETORNO || '      | ' 
-                                           || SUBSTR(lead_rec.LINKCONTATO, 1, 50) || '...' || ' | ' 
+                                           || SUBSTR(v_link_contato, 1, 50) || '...' || ' | ' 
                                            || lead_rec.SITUACAO || '  | '
                                            || lead_rec.DATA_PREVISTA_RETORNO || CHR(10);
 

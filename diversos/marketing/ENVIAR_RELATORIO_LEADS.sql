@@ -5,7 +5,7 @@ CREATE OR REPLACE PROCEDURE ENVIAR_RELATORIO_LEADS AS
     v_count         NUMBER;
     v_count_atrasados NUMBER;
     v_relatorio     CLOB;
-    v_link_contato  VARCHAR2(400);  -- Para construir o link HTML
+    v_link_contato  VARCHAR2(4000);  -- Para construir o link HTML
 BEGIN
     -- Cursor para percorrer os gerentes distintos e seus respectivos emails
     FOR gerente_rec IN (
@@ -18,11 +18,11 @@ BEGIN
         v_relatorio := ''; -- Limpa o relatório para o próximo gerente
         
         -- Adiciona cabeçalho do relatório para cada gerente
-        v_relatorio := v_relatorio || '------------------------------------------------------------------------------------------------------------------------' || CHR(10);
+        v_relatorio := v_relatorio || '-----------------------------------------<br/>';
         v_relatorio := v_relatorio || 'Gerente: ' || v_gerente || CHR(10);
-        v_relatorio := v_relatorio || '------------------------------------------------------------------------------------------------------------------------' || CHR(10);
-        v_relatorio := v_relatorio || 'Data Prevista   | URL do Lead                                                    | Situação  | Data Prevista Retorno' || CHR(10);
-        v_relatorio := v_relatorio || '------------------------------------------------------------------------------------------------------------------------' || CHR(10);
+        v_relatorio := v_relatorio || '-----------------------------------------<br/>';
+        v_relatorio := v_relatorio || 'Data Prevista   | URL do Lead            | Situação  | Data Prevista Retorno <br/>';
+        v_relatorio := v_relatorio || '-----------------------------------------<br/>';
 
         -- Inicializa contadores
         v_count := 0;  -- Contador de leads para o gerente
@@ -41,7 +41,7 @@ BEGIN
             v_relatorio := v_relatorio || lead_rec.DATA_PREVISTA_RETORNO || '      | ' 
                                            || SUBSTR(v_link_contato, 1, 50) || '...' || ' | ' 
                                            || lead_rec.SITUACAO || '  | '
-                                           || lead_rec.DATA_PREVISTA_RETORNO || CHR(10);
+                                           || lead_rec.DATA_PREVISTA_RETORNO || '<br/>';
 
             -- Verifica se o lead está atrasado
             IF lead_rec.SITUACAO = 'ATRASADO' THEN
@@ -67,12 +67,13 @@ BEGIN
 
         -- Envia o relatório gerado por email
         SEND_NOTIFICATION(
-            p_destinatario_usuario => NULL,  -- Usuário destinatário (não especificado)
+            p_destinatario_usuario => 68,  -- Usuário destinatário (não especificado)
             p_destinatario_grupo => NULL,    -- Grupo destinatário (não especificado)
             p_assunto => v_assunto,          -- Assunto do email
             p_mensagem => v_relatorio,       -- Conteúdo do email (relatório gerado)
             p_prioridade => 2                -- Prioridade média
         );
+        COMMIT;
     END LOOP;
 END;
 /

@@ -4,8 +4,14 @@
 -- Author: Danilo Fernando <danilo.bossanova@hotmail.com>
 -- Data de criação: 12/09/2024 14:07 (-03)
 
-CREATE OR REPLACE VIEW VW_LEADS_AB_COM_INFORMACOES AS
 
+
+CREATE OR REPLACE FORCE VIEW SANKHYA.VW_LEADS_AB_COM_INFORMACOES
+(DTCRIACAO, DATA_PREVISTA_RETORNO, AREA_INTERESSE, NOME_CONTATO, CIDADE, 
+ URL, DEPTO, GERENTE, EMAILDESTINO, SITUACAO, 
+ DIASDEATRASO, DIASPARAVENCIMENTO)
+BEQUEATH DEFINER
+AS 
 SELECT 
     LEADS.DTCRIACAO,
     TRIM(VW.DTPREVRET) AS DATA_PREVISTA_RETORNO,
@@ -15,38 +21,41 @@ SELECT
     LEADS.URL,
     LEADS.DEPTO,
     
+    -- Verifica se DEPTO é válido antes de usar o CASE
     CASE
-        WHEN TO_CHAR(DEPTO) = 'GE' THEN 'Fábio Carvalho'
-        WHEN TO_CHAR(DEPTO) = 'MA' THEN 'Lucas Duarte'
-        WHEN TO_CHAR(DEPTO) = 'PE' THEN 'Roygen Ramacciotte'
-        WHEN TO_CHAR(DEPTO) = 'RE' THEN 'Revalino Jr.'
-        WHEN TO_CHAR(DEPTO) = 'SE' THEN 'Sérgio Gabriel'
-        WHEN TO_CHAR(DEPTO) = 'SO' THEN 'Guilherme Lobo'
+        WHEN LEADS.DEPTO = 'GE' THEN 'Fábio Carvalho'
+        WHEN LEADS.DEPTO = 'MA' THEN 'Lucas Duarte'
+        WHEN LEADS.DEPTO = 'PE' THEN 'Roygen Ramacciotte'
+        WHEN LEADS.DEPTO = 'RE' THEN 'Revalino Jr.'
+        WHEN LEADS.DEPTO = 'SE' THEN 'Sérgio Gabriel'
+        WHEN LEADS.DEPTO = 'SO' THEN 'Guilherme Lobo'
         ELSE 'A definir'
     END AS GERENTE,
     
     CASE
-        WHEN TO_CHAR(DEPTO) = 'GE' THEN 'fabio.carvalho@dcco.com.br'
-        WHEN TO_CHAR(DEPTO) = 'MA' THEN 'adm.maquinas@dcco.com.br'
-        WHEN TO_CHAR(DEPTO) = 'PE' THEN 'roygen.ramacciotte@dcco.com.br'
-        WHEN TO_CHAR(DEPTO) = 'RE' THEN 'revalino.junior@dcco.com.br'
-        WHEN TO_CHAR(DEPTO) = 'SE' THEN 'sergio.gabriel@dcco.com.br'
-        WHEN TO_CHAR(DEPTO) = 'SO' THEN 'guilherme.lobo@dcco.com.br'
+        WHEN LEADS.DEPTO = 'GE' THEN 'fabio.carvalho@dcco.com.br'
+        WHEN LEADS.DEPTO = 'MA' THEN 'adm.maquinas@dcco.com.br'
+        WHEN LEADS.DEPTO = 'PE' THEN 'roygen.ramacciotte@dcco.com.br'
+        WHEN LEADS.DEPTO = 'RE' THEN 'revalino.junior@dcco.com.br'
+        WHEN LEADS.DEPTO = 'SE' THEN 'sergio.gabriel@dcco.com.br'
+        WHEN LEADS.DEPTO = 'SO' THEN 'guilherme.lobo@dcco.com.br'
         ELSE 'marketing@dcco.com.br'
     END AS EMAILDESTINO,
     
+    -- Verifica se VW.DTPREVRET é não nulo antes de comparar com SYSDATE
     CASE
-        WHEN SYSDATE > VW.DTPREVRET THEN 'ATRASADO'
-        WHEN SYSDATE <= VW.DTPREVRET THEN 'NO PRAZO'
+        WHEN VW.DTPREVRET IS NOT NULL AND SYSDATE > VW.DTPREVRET THEN 'ATRASADO'
+        WHEN VW.DTPREVRET IS NOT NULL AND SYSDATE <= VW.DTPREVRET THEN 'NO PRAZO'
+        ELSE 'SEM DATA'  -- Caso VW.DTPREVRET seja NULL
     END AS SITUACAO,
     
     CASE
-        WHEN SYSDATE > VW.DTPREVRET THEN ROUND(TRUNC(SYSDATE - VW.DTPREVRET))
+        WHEN VW.DTPREVRET IS NOT NULL AND SYSDATE > VW.DTPREVRET THEN ROUND(TRUNC(SYSDATE - VW.DTPREVRET))
         ELSE 0
     END AS DIASDEATRASO,
     
     CASE
-        WHEN SYSDATE <= VW.DTPREVRET THEN ROUND(TRUNC(VW.DTPREVRET) - TRUNC(SYSDATE))
+        WHEN VW.DTPREVRET IS NOT NULL AND SYSDATE <= VW.DTPREVRET THEN ROUND(TRUNC(VW.DTPREVRET) - TRUNC(SYSDATE))
         ELSE 0
     END AS DIASPARAVENCIMENTO
     

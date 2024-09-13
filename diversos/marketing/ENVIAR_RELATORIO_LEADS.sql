@@ -5,7 +5,7 @@ CREATE OR REPLACE PROCEDURE ENVIAR_RELATORIO_LEADS AS
     v_count         NUMBER;
     v_count_atrasados NUMBER;
     v_relatorio     CLOB;
-    v_link_contato  VARCHAR2(400);  -- Para construir o link HTML
+    v_link_contato  CLOB;  -- Para construir o link HTML
     
     v_error_stack VARCHAR2(4000);
     
@@ -31,7 +31,7 @@ BEGIN
 
             -- Adiciona cabeçalho do relatório para cada gerente
             v_relatorio := v_relatorio || '----------------------------------------' || '<br>';
-            v_relatorio := v_relatorio || 'Gerente: ' || v_gerente || CHR(10);
+            v_relatorio := v_relatorio || 'Gerente: ' || v_gerente || '<br>';
             v_relatorio := v_relatorio || '----------------------------------------' || '<br>';
             v_relatorio := v_relatorio || RPAD('Data Criação', 15) || ' | ' || RPAD('URL do Lead', 40) || ' | ' || RPAD('Situação', 10) || ' | ' || 'Data Prevista Retorno <br>';
             v_relatorio := v_relatorio || '----------------------------------------------------------------------------------------<br>';
@@ -42,17 +42,21 @@ BEGIN
 
             -- Consulta os leads do gerente e acumula as informações no relatório
             FOR lead_rec IN (
-                SELECT TO_CHAR(DTCRIACAO, 'DD/MM/YYYY') AS DATA_CRIACAO, 
-                       NOME_CONTATO, CIDADE, URL, SITUACAO, 
-                       TO_CHAR(DATA_PREVISTA_RETORNO, 'DD/MM/YYYY') AS DATA_PREVISTA_RETORNO
+                SELECT DTCRIACAO AS DATA_CRIACAO, 
+                       NOME_CONTATO, 
+                       CIDADE, 
+                       URL, 
+                       SITUACAO, 
+                       DATA_PREVISTA_RETORNO
                 FROM VW_LEADS_AB_COM_INFORMACOES
                 WHERE GERENTE = v_gerente
             ) LOOP
                 -- Constrói o link HTML com o nome do contato e cidade
-                v_link_contato := '<a href="' || lead_rec.URL || '">' || lead_rec.NOME_CONTATO || ' - ' || lead_rec.CIDADE || '</a>';
-
+                --v_link_contato := '<a href=' || DBMS_ASSERT.ENQUOTE_LITERAL(lead_rec.URL) || '>' || lead_rec.NOME_CONTATO || ' - ' || lead_rec.CIDADE || '</a>';
+                v_link_contato := '<a href=' || escape_double_quotes_html(DBMS_ASSERT.ENQUOTE_LITERAL(lead_rec.URL)) || '>' ||  NVL(lead_rec.NOME_CONTATO,'Cliente') ||  '</a>';
+                     
                 -- Acumula as informações do lead no relatório, incluindo o link HTML
-                v_relatorio := v_relatorio || RPAD(lead_rec.DATA_CRIACAO, 15) || ' | ' || RPAD(v_link_contato, 40) || ' | ' || RPAD(lead_rec.SITUACAO, 10) || ' | ' || lead_rec.DATA_PREVISTA_RETORNO || '<br>';
+                v_relatorio := v_relatorio || RPAD(lead_rec.DATA_CRIACAO, 15) || ' | ' || RPAD(v_link_contato, 135) || ' | ' || RPAD(lead_rec.SITUACAO, 10) || ' | ' || lead_rec.DATA_PREVISTA_RETORNO || '<br>';
 
                 -- Verifica se o lead está atrasado
                 IF lead_rec.SITUACAO = 'ATRASADO' THEN
@@ -61,6 +65,10 @@ BEGIN
 
                 -- Incrementa o contador total de leads
                 v_count := v_count + 1;
+                
+                DBMS_OUTPUT.PUT_LINE('Link de Relatorio: ' || v_relatorio );
+                
+                
             END LOOP;
 
             -- Mensagem se não houver leads para o gerente
@@ -86,13 +94,17 @@ BEGIN
                     p_mensagem => v_relatorio,     -- Conteúdo da notificação
                     p_prioridade => 2              -- Prioridade média
                 );
-
-                -- Envia o email usando a procedure de email
+                
+                COMMIT;
+                
+                /*-- Envia o email usando a procedure de email
                 SANKHYA.EMAIL(
-                    P_EMAIL =>  'danilo.fernando@grupocopar.com.br' /*v_email_destino*/,     -- Endereço de email do gerente
+                    P_EMAIL =>  'danilo.fernando@grupocopar.com.br' /*v_email_destino/,     -- Endereço de email do gerente
                     P_TITULO => v_assunto,          -- Assunto do email
                     P_MSGCLOB => v_relatorio        -- Conteúdo do email (HTML com <br>)
                 );
+                
+                /*COMMIT;*/
                 
             ELSE
                 -- Caso não existam leads atrasados, envia notificação de "Parabéns"
@@ -104,12 +116,13 @@ BEGIN
                     p_prioridade => 2              -- Prioridade média
                 );
 
-                -- Envia o email de "Parabéns"
+                /*-- Envia o email de "Parabéns"
                 SANKHYA.EMAIL(
-                    P_EMAIL =>  'danilo.fernando@grupocopar.com.br', /*v_email_destino,*/     -- Endereço de email do gerente
+                    P_EMAIL =>  'danilo.fernando@grupocopar.com.br', /*v_email_destino,/     -- Endereço de email do gerente
                     P_TITULO => v_assunto,          -- Assunto do email
                     P_MSGCLOB => 'Parabéns! Nenhum lead está atrasado!'  -- Conteúdo do email
-                );
+                );*/
+                
             END IF;
 
             COMMIT;

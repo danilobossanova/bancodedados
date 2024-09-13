@@ -5,6 +5,7 @@ CREATE OR REPLACE PROCEDURE ENVIAR_RELATORIO_LEADS AS
     v_count         NUMBER;
     v_count_atrasados NUMBER;
     v_relatorio     CLOB;
+    v_link_contato  VARCHAR2(400);  -- Para construir o link HTML
 BEGIN
     -- Cursor para percorrer os gerentes distintos e seus respectivos emails
     FOR gerente_rec IN (
@@ -41,15 +42,17 @@ BEGIN
             -- Consulta os leads do gerente e acumula as informações no relatório
             FOR lead_rec IN (
                 SELECT TO_CHAR(DTCRIACAO, 'DD/MM/YYYY') AS DATA_CRIACAO, 
-                       NOME_CONTATO || ' - ' || CIDADE AS LEAD_INFO,
-                       SITUACAO, 
+                       NOME_CONTATO, CIDADE, URL, SITUACAO, 
                        TO_CHAR(DATA_PREVISTA_RETORNO, 'DD/MM/YYYY') AS DATA_PREVISTA_RETORNO
                 FROM VW_LEADS_AB_COM_INFORMACOES
                 WHERE GERENTE = v_gerente
             ) LOOP
-                -- Acumula as informações do lead no relatório
+                -- Constrói o link HTML com o nome do contato e cidade
+                v_link_contato := '<a href="' || lead_rec.URL || '">' || lead_rec.NOME_CONTATO || ' - ' || lead_rec.CIDADE || '</a>';
+
+                -- Acumula as informações do lead no relatório, incluindo o link HTML
                 v_relatorio := v_relatorio || RPAD(lead_rec.DATA_CRIACAO, 15) || ' | ' 
-                                               || RPAD(SUBSTR(lead_rec.LEAD_INFO, 1, 40), 40) || ' | ' 
+                                               || RPAD(v_link_contato, 40) || ' | ' 
                                                || RPAD(lead_rec.SITUACAO, 10) || ' | '
                                                || lead_rec.DATA_PREVISTA_RETORNO || CHR(10);
 
@@ -69,3 +72,26 @@ BEGIN
                 -- Adiciona o total de leads atrasados ao relatório
                 v_relatorio := v_relatorio || '----------------------------------------' || CHR(10);
                 v_relatorio := v_relatorio || 'Total de leads atrasados: ' || v_count_atrasados || CHR(10);
+                v_relatorio := v_relatorio || '----------------------------------------' || CHR(10);
+            END IF;
+
+            -- Define o assunto do email
+            v_assunto := 'Relatório de Leads Abertos - ' || v_gerente;
+
+            -- Envia o relatório gerado por email
+            SEND_NOTIFICATION(
+                p_destinatario_usuario => NULL,  -- Usuário destinatário (não especificado)
+                p_destinatario_grupo => NULL,    -- Grupo destinatário (não especificado)
+                p_assunto => v_assunto,          -- Assunto do email
+                p_mensagem => v_relatorio,       -- Conteúdo do email (relatório gerado)
+                p_prioridade => 2                -- Prioridade média
+            );
+
+        EXCEPTION
+            WHEN OTHERS THEN
+                -- Se houver algum erro ao processar esse gerente, exibe a mensagem de erro
+                DBMS_OUTPUT.PUT_LINE('Erro ao processar o gerente ' || v_gerente || ': ' || SQLERRM);
+        END;
+    END LOOP;
+END;
+/

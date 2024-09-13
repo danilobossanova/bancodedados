@@ -26,14 +26,14 @@ BEGIN
             v_relatorio := ''; -- Limpa o relatório para o próximo gerente
 
             -- Adiciona cabeçalho do relatório para cada gerente
-            v_relatorio := v_relatorio || '----------------------------------------' || CHR(10);
+            v_relatorio := v_relatorio || '----------------------------------------' || '<br>';
             v_relatorio := v_relatorio || 'Gerente: ' || v_gerente || CHR(10);
-            v_relatorio := v_relatorio || '----------------------------------------' || CHR(10);
+            v_relatorio := v_relatorio || '----------------------------------------' || '<br>';
             v_relatorio := v_relatorio || RPAD('Data Criação', 15) || ' | ' 
                                            || RPAD('URL do Lead', 40) || ' | ' 
                                            || RPAD('Situação', 10) || ' | '
-                                           || 'Data Prevista Retorno' || CHR(10);
-            v_relatorio := v_relatorio || '----------------------------------------------------------------------------------------' || CHR(10);
+                                           || 'Data Prevista Retorno <br>';
+            v_relatorio := v_relatorio || '----------------------------------------------------------------------------------------<br>';
 
             -- Inicializa contadores
             v_count := 0;  -- Contador de leads para o gerente
@@ -54,7 +54,7 @@ BEGIN
                 v_relatorio := v_relatorio || RPAD(lead_rec.DATA_CRIACAO, 15) || ' | ' 
                                                || RPAD(v_link_contato, 40) || ' | ' 
                                                || RPAD(lead_rec.SITUACAO, 10) || ' | '
-                                               || lead_rec.DATA_PREVISTA_RETORNO || CHR(10);
+                                               || lead_rec.DATA_PREVISTA_RETORNO || '<br>';
 
                 -- Verifica se o lead está atrasado
                 IF lead_rec.SITUACAO = 'ATRASADO' THEN
@@ -67,12 +67,12 @@ BEGIN
 
             -- Mensagem se não houver leads para o gerente
             IF v_count = 0 THEN
-                v_relatorio := v_relatorio || 'Nenhum lead aberto encontrado para este gerente.' || CHR(10);
+                v_relatorio := v_relatorio || 'Nenhum lead aberto encontrado para este gerente.' || '<br>';
             ELSE
                 -- Adiciona o total de leads atrasados ao relatório
-                v_relatorio := v_relatorio || '----------------------------------------' || CHR(10);
-                v_relatorio := v_relatorio || 'Total de leads atrasados: ' || v_count_atrasados || CHR(10);
-                v_relatorio := v_relatorio || '----------------------------------------' || CHR(10);
+                v_relatorio := v_relatorio || '----------------------------------------' || '<br>';
+                v_relatorio := v_relatorio || 'Total de leads atrasados: ' || v_count_atrasados || '<br>';
+                v_relatorio := v_relatorio || '----------------------------------------' || '<br>';
             END IF;
 
             -- Define o assunto do email
@@ -80,7 +80,7 @@ BEGIN
 
             -- Envia o relatório gerado por email
             SEND_NOTIFICATION(
-                p_destinatario_usuario => NULL,  -- Usuário destinatário (não especificado)
+                p_destinatario_usuario => 68,  -- Usuário destinatário (não especificado)
                 p_destinatario_grupo => NULL,    -- Grupo destinatário (não especificado)
                 p_assunto => v_assunto,          -- Assunto do email
                 p_mensagem => v_relatorio,       -- Conteúdo do email (relatório gerado)

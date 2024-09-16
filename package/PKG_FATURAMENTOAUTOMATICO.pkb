@@ -136,7 +136,7 @@ CREATE OR REPLACE PACKAGE BODY SANKHYA.PKG_FATURAMENTOAUTOMATICO AS
         P_NUFAT                IN NUMBER,
         P_CODEMP               IN NUMBER,
         P_SITUACAOWMS          IN NUMBER,
-        P_DTHRULTFATURAMENTO   IN FLOAT
+        P_DTHRULTFATURAMENTO   IN DATE
     ) IS
     BEGIN
     
@@ -295,6 +295,7 @@ BEGIN
 
     IF EMPRESA_UTILIZA_WMS = 'N' THEN
         SEND_NOTIFICATION(68, NULL, 'Empresa não utiliza WMS', 'Empresa: ' || P_CODEMP_DA_CAB, 1);
+        commit;
         P_RESULTADO := FALSE;
         RETURN;
     END IF;
@@ -305,6 +306,7 @@ BEGIN
     -- Verifica se a empresa está habilitada para faturamento automático [2]
     IF P_CODEMP_DA_CAB <> G_CODEMP OR G_ATIVO <> 'SIM' THEN
         SEND_NOTIFICATION(68, NULL, 'Empresa não habilitada para faturamento automático', 'Empresa: ' || P_CODEMP_DA_CAB, 1);
+        commit;
         P_RESULTADO := FALSE;
         RETURN;
     END IF;
@@ -314,6 +316,7 @@ BEGIN
     
     IF NOT TOP_HABILITADA_FATURAMENTO THEN
         SEND_NOTIFICATION(68, NULL, 'TOP não habilitada para faturamento', 'TOP: ' || P_CODTIPOPER_DA_CAB, 1);
+        commit;
         P_RESULTADO := FALSE;
         RETURN;
     END IF;
@@ -321,15 +324,50 @@ BEGIN
     -- Verifica o tipo de negociação [4]
     CONSULTA_TIPNEGOFATDCCO(P_CODTIPVENDA_DA_CAB, P_CODEMP_DA_CAB, VENDA_A_PRAZO);
 
-    IF VENDA_A_PRAZO = TRUE THEN
+    IF VENDA_A_PRAZO  THEN
         -- Verifica se o cliente tem limite de crédito [4.1]
         CLIENTE_TEM_LIMITE_CREDITO(P_CODPARC_DA_CAB, P_VALORNOTA_DA_CAB, CLIENTE_TEM_LIMITE);
 
-        IF CLIENTE_TEM_LIMITE = FALSE THEN
+        IF NOT CLIENTE_TEM_LIMITE THEN
+        
             SEND_NOTIFICATION(P_CODUSU_DA_CAB, NULL, 'Faturamento a Prazo - Limite Insuficiente', 
             'O cliente do pedido <b>' || P_NUNOTA || '</b> não tem limite para ser faturado automaticamente.', -1);
+            
+            SEND_NOTIFICATION(68, NULL, 'Faturamento a Prazo - Limite Insuficiente', 
+            'O cliente do pedido <b>' || P_NUNOTA || '</b> não tem limite para ser faturado automaticamente.', -1);
+            
+            commit;
             P_RESULTADO := FALSE;
             RETURN;
+        
+        ELSE -- CLIENTE TEM LIMITE DE CREDITO
+        
+        
+             -- Chama o faturamento automático [6]
+            P_STATUS := SANKHYA.PKG_API_DCCO.FC_FATURAR_ESTOQUE(P_NUNOTA, 1830, P_RETURN);
+
+            IF P_STATUS <> 1 THEN
+                SEND_NOTIFICATION(68, NULL, 'Erro ao Faturar', 'Erro: ' || P_RETURN || ' - Pedido: ' || P_NUNOTA, 1);
+                SEND_NOTIFICATION(P_CODUSU_DA_CAB, NULL, 'Erro ao Faturar', 'Erro: ' || P_RETURN || ' - Pedido: ' || P_NUNOTA, 1);
+                commit;
+                P_RESULTADO := FALSE;
+                RETURN;
+                
+            ELSE
+            
+                SEND_NOTIFICATION(68, NULL, 'Faturamento Automatico', 'Pedido: ' || P_NUNOTA, 1);
+                SEND_NOTIFICATION(P_CODUSU_DA_CAB, NULL, 'Faturamento Automatico', 'Pedido: ' || P_NUNOTA, 1);
+                commit;
+                
+                P_RESULTADO := TRUE;
+                RETURN;
+                
+            END IF;
+
+            -- Atualiza o resultado e o status do faturamento [7]
+            P_RESULTADO := TRUE;
+            RETURN;
+        
         END IF;
 
     ELSE
@@ -337,12 +375,12 @@ BEGIN
         -- Verifica se a venda é à vista [5]
         CONSULTA_TIPNEGOFATAVISTADCCO(P_CODTIPVENDA_DA_CAB, P_CODEMP_DA_CAB, VENDA_A_VISTA);
 
-        IF VENDA_A_VISTA = TRUE THEN
+        IF VENDA_A_VISTA THEN
         
             -- Verifica se há liberação para venda à vista
             TEM_LIBERACAO(P_NUNOTA, LIBERADO_VENDA_A_VISTA);
             
-            IF LIBERADO_VENDA_A_VISTA = FALSE THEN
+            IF NOT LIBERADO_VENDA_A_VISTA THEN
             
                 -- Notifica financeiro e vendedor que existe liberacoes pendentes[5.1]
                 SEND_NOTIFICATION(NULL, 9, 'Liberação Pendente - Venda à Vista', 
@@ -360,6 +398,7 @@ BEGIN
                 SEND_NOTIFICATION(P_CODUSU_DA_CAB, NULL, 'Liberação Pendente - Venda à Vista', 
                 'Pedido com pagamento à vista|pix|cartao|debito|deposito aguardando liberação. NU: ' || P_NUNOTA, -1); -- Vendedor
                 
+                commit;
                 
                 P_RESULTADO := FALSE;
                 RETURN;
@@ -371,7 +410,7 @@ BEGIN
             -- Tipo de negociação não configurado para faturamento automático
             SEND_NOTIFICATION(P_CODUSU_DA_CAB, NULL, 'Faturamento Automático Não Permitido',
             'Tipo de negociação selecionado para o pedido ' || P_NUNOTA || ' não permite faturamento automático.', -1);
-            
+            commit;
             
             
             P_RESULTADO := FALSE;
@@ -381,36 +420,92 @@ BEGIN
     END IF;
 
     -- Chama o faturamento automático [6]
-    P_STATUS := SANKHYA.PKG_API_DCCO.FC_FATURAR_ESTOQUE(P_NUNOTA, 1830, P_RETURN);
+    /*P_STATUS := SANKHYA.PKG_API_DCCO.FC_FATURAR_ESTOQUE(P_NUNOTA, 1830, P_RETURN);
 
     IF P_STATUS <> 1 THEN
         SEND_NOTIFICATION(68, NULL, 'Erro ao Faturar', 'Erro: ' || P_RETURN || ' - Pedido: ' || P_NUNOTA, 1);
+        SEND_NOTIFICATION(P_CODUSU_DA_CAB, NULL, 'Erro ao Faturar', 'Erro: ' || P_RETURN || ' - Pedido: ' || P_NUNOTA, 1);
+        commit;
         P_RESULTADO := FALSE;
         RETURN;
     END IF;
 
     -- Atualiza o resultado e o status do faturamento [7]
-    P_RESULTADO := TRUE;
+    P_RESULTADO := TRUE;*/
 
 EXCEPTION
     WHEN OTHERS THEN
         -- Captura o erro e realiza o log apropriado
         SEND_NOTIFICATION(68, NULL, 'Erro inesperado', 'Erro ao processar faturamento do pedido ' || P_NUNOTA || '. Detalhes: ' || SQLERRM, 1);
+        commit;
         P_RESULTADO := FALSE;
 END FATURAPELOESTOQUE;
 
 
+
+     -- Procedimento para atualizar logs e tabelas após faturamento
+    PROCEDURE ATUALIZAR_LOGS_FATURAMENTO(
+        p_nunota IN NUMBER,
+        p_resultado IN BOOLEAN,
+        p_mensagem IN VARCHAR2
+    ) IS
+        v_codemp NUMBER;
+        v_numnota NUMBER;
+        
+        v_msgerro VARCHAR2(600);
+        
+    BEGIN
+    
+        IF P_RESULTADO THEN
+            v_msgerro := 'Faturamento automático realizado com sucesso.';
+        ELSE
+            v_msgerro :='Erro no faturamento automático: ' || p_mensagem;
+        END IF;
+    
+    
+        -- Obter CODEMP e NUMNOTA
+        SELECT CODEMP, NUMNOTA INTO v_codemp, v_numnota
+        FROM TGFCAB
+        WHERE NUNOTA = p_nunota;
+
+        -- Atualizar TGWFATAUTO
+        UPDATE TGWFATAUTO
+        SET DTULTFATCONFSEP = SYSDATE
+        WHERE CODEMP = v_codemp;
+
+        -- Atualizar AD_FATAUTDCCO
+        UPDATE AD_FATAUTDCCO
+        SET DTHRULTFATURAMENTO = SYSDATE
+        WHERE CODEMP = v_codemp;
+
+        -- Inserir log em TGWLOGFATAUTO
+        INSERT INTO TGWLOGFATAUTO (NUNOTA, NUMNOTA, LOG, DHALTER)
+        VALUES (p_nunota, v_numnota, v_msgerro,SYSDATE);
+
+        COMMIT;
+        
+    EXCEPTION
+        WHEN OTHERS THEN
+        
+            v_msgerro := 'Erro ao atualizar logs: ' || SQLERRM;
+            -- Logar erro e não propagar a exceção para não interromper o fluxo principal
+            INSERT INTO TGWLOGFATAUTO (NUNOTA, NUMNOTA, LOG, DHALTER)
+            VALUES (p_nunota, v_numnota, v_msgerro, SYSDATE);
+            COMMIT;
+    END ATUALIZAR_LOGS_FATURAMENTO;
+
+
     PROCEDURE CLIENTE_TEM_LIMITE_CREDITO(
-        P_CODPAR        IN NUMBER,
-        P_VLRCOMPRA     IN NUMBER,
-        P_STATUS        OUT BOOLEAN
+    P_CODPAR        IN NUMBER,
+    P_VLRCOMPRA     IN NUMBER,
+    P_STATUS        OUT BOOLEAN
     ) IS
         V_LIMCRED           NUMBER;
         V_TOTAL_EM_ABERTO   NUMBER;
         V_LIMITE_DISPONIVEL NUMBER;
         
     BEGIN
-    
+
         -- Busca o limite de crédito e o total em aberto do cliente
         SELECT 
             PARC.LIMCRED,
@@ -422,11 +517,11 @@ END FATURAPELOESTOQUE;
             TGFPAR PARC
         LEFT JOIN 
             TGFFIN FIN ON PARC.CODPARC = FIN.CODPARC 
-                       AND FIN.DHBAIXA IS NULL 
-                       AND FIN.RECDESP = 1 
-                       AND FIN.PROVISAO = 'N'
         WHERE 
             PARC.CODPARC = P_CODPAR
+            AND (FIN.DHBAIXA IS NULL OR FIN.CODPARC IS NULL)
+            AND (FIN.RECDESP = 1 OR FIN.CODPARC IS NULL)
+            AND (FIN.PROVISAO = 'N' OR FIN.CODPARC IS NULL)
         GROUP BY 
             PARC.LIMCRED;
         
@@ -522,7 +617,7 @@ END FATURAPELOESTOQUE;
                 0,                    -- VLRLIMITE (valor a ser definido)
                 P_VLRATUAL,           -- VLRATUAL
                 0,                    -- VLRLIBERADO (valor padrão)
-                209,                    -- CODUSULIB (valor padrão)
+                1020,                    -- CODUSULIB (valor padrão)
                 NULL,                 -- DHLIB (valor a ser definido)
                 'Aguarde o financeiro confirmar o recebimento do pagamento. Solicitação Automatica.', -- OBSERVACAO
                 0,                    -- PERCLIMITE (valor padrão)

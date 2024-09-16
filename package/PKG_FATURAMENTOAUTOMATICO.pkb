@@ -106,7 +106,7 @@ CREATE OR REPLACE PACKAGE BODY SANKHYA.PKG_FATURAMENTOAUTOMATICO AS
     END GET_TIPONEGOCIACAO_NUNOTA;
 
     /************************************************************************** 
-    * Insere registro no log de faturamento - Estrutura padrão
+    * Insere registro no log de faturamento - Estrutura padrão TGWLOGFATAUTO
     ***************************************************************************/
     FUNCTION INSERE_LOGFATAUTO(
         p_nunota   IN NUMBER,
@@ -115,7 +115,7 @@ CREATE OR REPLACE PACKAGE BODY SANKHYA.PKG_FATURAMENTOAUTOMATICO AS
         p_dhalter  IN DATE
     ) RETURN BOOLEAN IS
     BEGIN
-    
+
         INSERT INTO SANKHYA.TGWLOGFATAUTO (NUNOTA, NUMNOTA, LOG, DHALTER)
         VALUES (p_nunota, p_numnota, p_log, p_dhalter);
         
@@ -155,6 +155,8 @@ CREATE OR REPLACE PACKAGE BODY SANKHYA.PKG_FATURAMENTOAUTOMATICO AS
             ROLLBACK;
             RAISE;
     END ATUALIZA_DHFATAUTDCCO;
+
+-- TGWLOGFATAUTO -- TGWFATAUTO -- AD_FATAUTDCCO
 
     /**************************************************************************
     * Consulta se o tipo de negociação está configurado na tabela AD_TIPNEGOFATDCCO
@@ -262,7 +264,8 @@ CREATE OR REPLACE PACKAGE BODY SANKHYA.PKG_FATURAMENTOAUTOMATICO AS
     */
     PROCEDURE FATURAPELOESTOQUE(
     P_NUNOTA    IN NUMBER,
-    P_RESULTADO OUT BOOLEAN
+    P_RESULTADO OUT BOOLEAN,
+    P_MENSAGEM  OUT VARCHAR2
 ) IS
     EMPRESA_UTILIZA_WMS              VARCHAR2(1) := 'N';  -- Substituindo CHAR por VARCHAR2
     TOP_HABILITADA_FATURAMENTO        BOOLEAN;
@@ -292,11 +295,20 @@ BEGIN
 
     -- Verifica se a empresa utiliza WMS [1]
     STP_EMP_UTILIZAWMS_DCCO(P_CODEMP_DA_CAB, EMPRESA_UTILIZA_WMS);
+    
 
     IF EMPRESA_UTILIZA_WMS = 'N' THEN
+        
         SEND_NOTIFICATION(68, NULL, 'Empresa não utiliza WMS', 'Empresa: ' || P_CODEMP_DA_CAB, 1);
         commit;
+        
+        P_MENSAGEM := 'Erro ao faturar automaticamente. Empresa não utiliza WMS';
         P_RESULTADO := FALSE;
+        
+        
+        ATUALIZAR_LOGS_FATURAMENTO(P_NUNOTA,P_RESULTADO, P_MENSAGEM );
+        COMMIT;
+        
         RETURN;
     END IF;
 
@@ -305,9 +317,17 @@ BEGIN
 
     -- Verifica se a empresa está habilitada para faturamento automático [2]
     IF P_CODEMP_DA_CAB <> G_CODEMP OR G_ATIVO <> 'SIM' THEN
+    
         SEND_NOTIFICATION(68, NULL, 'Empresa não habilitada para faturamento automático', 'Empresa: ' || P_CODEMP_DA_CAB, 1);
         commit;
+        
+        P_MENSAGEM := 'Erro ao faturar automaticamente. Empresa não habilitada para faturamento automático. Empresa: ' || P_CODEMP_DA_CAB;
         P_RESULTADO := FALSE;
+        
+        
+        ATUALIZAR_LOGS_FATURAMENTO(P_NUNOTA,P_RESULTADO, P_MENSAGEM );
+        COMMIT;
+        
         RETURN;
     END IF;
 
@@ -317,7 +337,13 @@ BEGIN
     IF NOT TOP_HABILITADA_FATURAMENTO THEN
         SEND_NOTIFICATION(68, NULL, 'TOP não habilitada para faturamento', 'TOP: ' || P_CODTIPOPER_DA_CAB, 1);
         commit;
+        
+        P_MENSAGEM := 'Erro ao faturar automaticamente. TOP não habilitada para faturamento automático: ' || P_CODTIPOPER_DA_CAB;
         P_RESULTADO := FALSE;
+        
+        ATUALIZAR_LOGS_FATURAMENTO(P_NUNOTA,P_RESULTADO, P_MENSAGEM );
+        COMMIT;
+        
         RETURN;
     END IF;
 
@@ -337,7 +363,13 @@ BEGIN
             'O cliente do pedido <b>' || P_NUNOTA || '</b> não tem limite para ser faturado automaticamente.', -1);
             
             commit;
+            
+            P_MENSAGEM := 'Erro ao Faturar Automaticamente. Cliente não tem limite disponível. NUNOTA: ' || P_NUNOTA;
             P_RESULTADO := FALSE;
+            
+            ATUALIZAR_LOGS_FATURAMENTO(P_NUNOTA,P_RESULTADO, P_MENSAGEM );
+            COMMIT;
+            
             RETURN;
         
         ELSE -- CLIENTE TEM LIMITE DE CREDITO
@@ -347,26 +379,41 @@ BEGIN
             P_STATUS := SANKHYA.PKG_API_DCCO.FC_FATURAR_ESTOQUE(P_NUNOTA, 1830, P_RETURN);
 
             IF P_STATUS <> 1 THEN
+            
+                ATUALIZAR_LOGS_FATURAMENTO(P_NUNOTA,FALSE,'Erro ao tentar faturar pedido. ' || P_RETURN);
+                COMMIT;
+                
                 SEND_NOTIFICATION(68, NULL, 'Erro ao Faturar', 'Erro: ' || P_RETURN || ' - Pedido: ' || P_NUNOTA, 1);
                 SEND_NOTIFICATION(P_CODUSU_DA_CAB, NULL, 'Erro ao Faturar', 'Erro: ' || P_RETURN || ' - Pedido: ' || P_NUNOTA, 1);
                 commit;
+            
+                P_MENSAGEM := 'Erro o faturar Automaticamente. Erro: ' ||   P_RETURN || ' - Pedido: ' || P_NUNOTA ;
                 P_RESULTADO := FALSE;
+                
+                ATUALIZAR_LOGS_FATURAMENTO(P_NUNOTA,P_RESULTADO, P_MENSAGEM );
+                COMMIT;
+                
                 RETURN;
                 
             ELSE
+            
+                ATUALIZAR_LOGS_FATURAMENTO(P_NUNOTA,TRUE,'Faturado com Sucesso. ' || P_RETURN );
+                COMMIT;
             
                 SEND_NOTIFICATION(68, NULL, 'Faturamento Automatico', 'Pedido: ' || P_NUNOTA, 1);
                 SEND_NOTIFICATION(P_CODUSU_DA_CAB, NULL, 'Faturamento Automatico', 'Pedido: ' || P_NUNOTA, 1);
                 commit;
                 
+                P_MENSAGEM := 'O PEDIDO Nº UNICO: ' || P_NUNOTA  || '  FOI SEPARADO, CONFERIDO E FATURADO COM SUCESSO! <br>' || P_RETURN;
                 P_RESULTADO := TRUE;
+                
+                ATUALIZAR_LOGS_FATURAMENTO(P_NUNOTA,P_RESULTADO, P_MENSAGEM );
+                COMMIT;
+                
                 RETURN;
                 
             END IF;
 
-            -- Atualiza o resultado e o status do faturamento [7]
-            P_RESULTADO := TRUE;
-            RETURN;
         
         END IF;
 
@@ -400,7 +447,13 @@ BEGIN
                 
                 commit;
                 
+                P_MENSAGEM := 'Liberação Pendente - Venda à Vista. Pedido com pagamento à vista|pix|cartao|debito|deposito aguardando liberação. NU: ' || P_NUNOTA;
                 P_RESULTADO := FALSE;
+                
+                ATUALIZAR_LOGS_FATURAMENTO(P_NUNOTA,FALSE,'Erro ao Faturar. | ' || P_MENSAGEM );
+                COMMIT;
+                
+                
                 RETURN;
                 
             END IF;
@@ -412,12 +465,22 @@ BEGIN
             'Tipo de negociação selecionado para o pedido ' || P_NUNOTA || ' não permite faturamento automático.', -1);
             commit;
             
-            
+            P_MENSAGEM := 'Erro. Tipo de Negociação não configurada no Faturamento Automatico';
             P_RESULTADO := FALSE;
+            
+            ATUALIZAR_LOGS_FATURAMENTO(P_NUNOTA,P_RESULTADO, P_MENSAGEM );
+            COMMIT;
+            
             RETURN;
             
         END IF;
     END IF;
+    
+   
+    -- Atualiza campo de data de ultimo faturamento
+    ATUALIZA_DHFATAUTDCCO (G_NUFAT,G_CODEMP,G_SITUACAOWMS,SYSDATE);
+    SEND_NOTIFICATION(68, NULL, 'Conf. Fat', 'NUFAT:  ' || G_NUFAT || '  CODEMP ' || G_CODEMP || ' SITUACAOWMS: ' || G_SITUACAOWMS, 1);
+    COMMIT; 
 
     -- Chama o faturamento automático [6]
     /*P_STATUS := SANKHYA.PKG_API_DCCO.FC_FATURAR_ESTOQUE(P_NUNOTA, 1830, P_RETURN);
@@ -435,6 +498,9 @@ BEGIN
 
 EXCEPTION
     WHEN OTHERS THEN
+    
+        ATUALIZAR_LOGS_FATURAMENTO(P_NUNOTA,FALSE,'Erro ao tentar faturar pedido. ' || DBMS_UTILITY.FORMAT_ERROR_STACK );
+    
         -- Captura o erro e realiza o log apropriado
         SEND_NOTIFICATION(68, NULL, 'Erro inesperado', 'Erro ao processar faturamento do pedido ' || P_NUNOTA || '. Detalhes: ' || SQLERRM, 1);
         commit;
@@ -451,47 +517,58 @@ END FATURAPELOESTOQUE;
     ) IS
         v_codemp NUMBER;
         v_numnota NUMBER;
-        
         v_msgerro VARCHAR2(600);
-        
+        v_resultado_insercao BOOLEAN;
     BEGIN
-    
         IF P_RESULTADO THEN
-            v_msgerro := 'Faturamento automático realizado com sucesso.';
+            v_msgerro := 'Faturamento automático realizado com sucesso. NUNOTA: ' || p_nunota;
         ELSE
-            v_msgerro :='Erro no faturamento automático: ' || p_mensagem;
+            v_msgerro := 'Erro no faturamento automático: ' || p_mensagem;
         END IF;
-    
-    
-        -- Obter CODEMP e NUMNOTA
-        SELECT CODEMP, NUMNOTA INTO v_codemp, v_numnota
-        FROM TGFCAB
-        WHERE NUNOTA = p_nunota;
 
-        -- Atualizar TGWFATAUTO
-        UPDATE TGWFATAUTO
-        SET DTULTFATCONFSEP = SYSDATE
-        WHERE CODEMP = v_codemp;
+        -- Obter CODEMP e NUMNOTA
+        BEGIN
+            SELECT CODEMP, NUMNOTA INTO v_codemp, v_numnota
+            FROM TGFCAB
+            WHERE NUNOTA = p_nunota;
+        EXCEPTION
+            WHEN NO_DATA_FOUND THEN
+                v_msgerro := 'Erro: NUNOTA ' || p_nunota || ' não encontrado na TGFCAB.';
+                RAISE_APPLICATION_ERROR(-20001, v_msgerro);
+        END;
+
+        -- Carrega alguns dados da configuração automática
+        CARREGA_CONFIG_FATAUT(v_codemp);
+
+        -- Chamar a função INSERE_LOGFATAUTO e capturar o retorno
+        v_resultado_insercao := INSERE_LOGFATAUTO(p_nunota, v_numnota, p_mensagem, SYSDATE);
+
+
+        -- Verificar o resultado da inserção do log, se necessário
+        IF NOT v_resultado_insercao THEN
+            DBMS_OUTPUT.PUT_LINE('Aviso: Falha ao inserir log para NUNOTA: ' || p_nunota);
+        END IF;
+
 
         -- Atualizar AD_FATAUTDCCO
-        UPDATE AD_FATAUTDCCO
-        SET DTHRULTFATURAMENTO = SYSDATE
-        WHERE CODEMP = v_codemp;
+        ATUALIZA_DHFATAUTDCCO(G_NUFAT, v_codemp, G_SITUACAOWMS, SYSDATE);
 
-        -- Inserir log em TGWLOGFATAUTO
-        INSERT INTO TGWLOGFATAUTO (NUNOTA, NUMNOTA, LOG, DHALTER)
-        VALUES (p_nunota, v_numnota, v_msgerro,SYSDATE);
+        -- Atualiza DATAHORA do último faturamento - ESTRUTURA PADRÃO
+        UPDATE TGWFATAUTO 
+        SET DTULTFATCONFSEP = SYSDATE 
+        WHERE CODEMP = v_codemp AND SITUACAO = G_SITUACAOWMS;
 
         COMMIT;
-        
+
     EXCEPTION
         WHEN OTHERS THEN
-        
             v_msgerro := 'Erro ao atualizar logs: ' || SQLERRM;
             -- Logar erro e não propagar a exceção para não interromper o fluxo principal
             INSERT INTO TGWLOGFATAUTO (NUNOTA, NUMNOTA, LOG, DHALTER)
-            VALUES (p_nunota, v_numnota, v_msgerro, SYSDATE);
+            VALUES (p_nunota, NVL(v_numnota, 0), v_msgerro, SYSDATE);
             COMMIT;
+            -- Opcionalmente, você pode decidir re-lançar a exceção aqui
+            -- RAISE;
     END ATUALIZAR_LOGS_FATURAMENTO;
 
 

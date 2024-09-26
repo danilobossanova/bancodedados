@@ -334,7 +334,8 @@ BEGIN
     -- Verifica se a TOP utilizada está habilitada para faturamento automático [3]
     CONSULTA_TOPPEDFATAUT(P_CODTIPOPER_DA_CAB, P_CODEMP_DA_CAB, TOP_HABILITADA_FATURAMENTO);
     
-    IF NOT TOP_HABILITADA_FATURAMENTO THEN
+    IF NOT TOP_HABILITADA_FATURAMENTO AND  P_CODTIPOPER_DA_CAB <> 1050 THEN
+    
         SEND_NOTIFICATION(68, NULL, 'TOP não habilitada para faturamento', 'TOP: ' || P_CODTIPOPER_DA_CAB, 1);
         commit;
         
@@ -345,6 +346,7 @@ BEGIN
         COMMIT;
         
         RETURN;
+            
     END IF;
 
     -- Verifica o tipo de negociação [4]

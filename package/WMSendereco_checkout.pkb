@@ -3,13 +3,30 @@
 * @since: 11/10/2024 13:19
 * @description: Package que concentra funcoes e procedures ligadas aos checkouts disponiveis.
 
+   Script  para gerar a tabela temporaria:
+
+    CREATE GLOBAL TEMPORARY TABLE temp_checkouts_em_uso (
+        codend NUMBER PRIMARY KEY,
+        data_bloqueio TIMESTAMP DEFAULT SYSTIMESTAMP
+    ) ON COMMIT PRESERVE ROWS;
+
 */
 CREATE OR REPLACE PACKAGE BODY WMSendereco_checkout AS
 
-    /* Função que retorna um endereço de checkout disponivel */
-   FUNCTION buscar_codend_disponivel RETURN NUMBER IS
+ /* Limpar CHeckouts Expirados */
+ PROCEDURE limpar_checkouts_expirados IS
+    BEGIN
+        DELETE FROM temp_checkouts_em_uso
+        WHERE data_bloqueio < SYSTIMESTAMP - INTERVAL '60' MINUTE;
+    END limpar_checkouts_expirados;
+
+    /* Buscar Condend Disponivel */
+    FUNCTION buscar_codend_disponivel RETURN NUMBER IS
         v_codend NUMBER;
     BEGIN
+        -- Limpar checkouts expirados antes de buscar um novo
+        limpar_checkouts_expirados;
+        
         SELECT e.codend
         INTO v_codend
         FROM tgwend e
@@ -26,8 +43,17 @@ CREATE OR REPLACE PACKAGE BODY WMSendereco_checkout AS
               FROM vgwsepchk v
               WHERE v.codenddestino = e.codend
           )
+          AND NOT EXISTS (
+              SELECT 1
+              FROM temp_checkouts_em_uso t
+              WHERE t.codend = e.codend
+          )
         ORDER BY e.endereco
         FETCH FIRST 1 ROW ONLY;
+        
+        -- Bloquear o checkout selecionado
+        INSERT INTO temp_checkouts_em_uso (codend) VALUES (v_codend);
+        COMMIT;
         
         RETURN v_codend;
     EXCEPTION
@@ -35,8 +61,7 @@ CREATE OR REPLACE PACKAGE BODY WMSendereco_checkout AS
             RETURN NULL;
     END buscar_codend_disponivel;
     
-    
-    /* Função que retorna a descrição do endereço */
+    /* Obter Endereço */
     FUNCTION obter_endereco(p_codend IN NUMBER) RETURN VARCHAR2 IS
         v_endereco VARCHAR2(100);
     BEGIN
@@ -50,6 +75,16 @@ CREATE OR REPLACE PACKAGE BODY WMSendereco_checkout AS
         WHEN NO_DATA_FOUND THEN
             RETURN NULL;
     END obter_endereco;
+
+    /* Liberar Checkout */
+    PROCEDURE liberar_checkout(p_codend IN NUMBER) IS
+    BEGIN
+        DELETE FROM temp_checkouts_em_uso WHERE codend = p_codend;
+        COMMIT;
+    END liberar_checkout;  
+    
+    
+    
     
     
 END WMSendereco_checkout;

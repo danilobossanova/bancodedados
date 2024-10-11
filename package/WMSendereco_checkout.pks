@@ -14,5 +14,9 @@ CREATE OR REPLACE PACKAGE WMSendereco_checkout AS
     FUNCTION buscar_codend_disponivel RETURN NUMBER;
     FUNCTION obter_endereco(p_codend IN NUMBER) RETURN VARCHAR2;
     
+    /* Procedures que irão liberar checkout que estão reservados para separação */
+    PROCEDURE liberar_checkout(p_codend IN NUMBER);
+    PROCEDURE limpar_checkouts_expirados;
+    
 END WMSendereco_checkout;
 /

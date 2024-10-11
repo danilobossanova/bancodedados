@@ -6,12 +6,10 @@
 */
 CREATE OR REPLACE PACKAGE BODY WMSendereco_checkout AS
 
-    FUNCTION buscar_codend_disponivel RETURN NUMBER IS
-        
+    /* Função que retorna um endereço de checkout disponivel */
+   FUNCTION buscar_codend_disponivel RETURN NUMBER IS
         v_codend NUMBER;
-        
     BEGIN
-        
         SELECT e.codend
         INTO v_codend
         FROM tgwend e
@@ -36,12 +34,11 @@ CREATE OR REPLACE PACKAGE BODY WMSendereco_checkout AS
         WHEN NO_DATA_FOUND THEN
             RETURN NULL;
     END buscar_codend_disponivel;
-
-    FUNCTION obter_endereco(p_codend IN NUMBER) RETURN VARCHAR2 IS
-
-        v_endereco VARCHAR2(100);
     
-
+    
+    /* Função que retorna a descrição do endereço */
+    FUNCTION obter_endereco(p_codend IN NUMBER) RETURN VARCHAR2 IS
+        v_endereco VARCHAR2(100);
     BEGIN
         SELECT endereco
         INTO v_endereco

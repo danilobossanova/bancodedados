@@ -51,5 +51,5 @@ CREATE OR REPLACE PACKAGE BODY WMSendereco_checkout AS
             RETURN NULL;
     END obter_endereco;
     
-END endereco_checkout;
+END WMSendereco_checkout;
 /

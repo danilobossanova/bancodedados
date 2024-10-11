@@ -26,5 +26,5 @@ CREATE OR REPLACE PACKAGE WMSendereco_checkout AS
      * @return VARCHAR2 ENDERECO correspondente ao CODEND fornecido, ou NULL se não encontrado.
      */
     FUNCTION obter_endereco(p_codend IN NUMBER) RETURN VARCHAR2;
-END endereco_checkout;
+END WMSendereco_checkout;
 /

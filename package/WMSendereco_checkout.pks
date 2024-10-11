@@ -6,11 +6,10 @@
 */
 CREATE OR REPLACE PACKAGE WMSendereco_checkout AS
     -- Constantes para intervalos de endereços de checkout
-    c_inicio_intervalo_1    CONSTANT    VARCHAR2(16) := '11.98.001.01';
-    c_fim_intervalo_1       CONSTANT    VARCHAR2(16) := '11.98.001.99';
-    
-    c_inicio_intervalo_2    CONSTANT    VARCHAR2(16) := '11.98.002.01';
-    c_fim_intervalo_2       CONSTANT    VARCHAR2(16) := '11.98.002.99';
+    c_inicio_intervalo_1 CONSTANT VARCHAR2(16) := '11.98.001.01';
+    c_fim_intervalo_1 CONSTANT VARCHAR2(16) := '11.98.001.99';
+    c_inicio_intervalo_2 CONSTANT VARCHAR2(16) := '11.98.002.01';
+    c_fim_intervalo_2 CONSTANT VARCHAR2(16) := '11.98.002.99';
     
     /**
      * Busca o CODEND de um endereço de checkout disponível.

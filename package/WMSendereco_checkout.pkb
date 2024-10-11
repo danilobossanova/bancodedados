@@ -6,15 +6,12 @@
 */
 CREATE OR REPLACE PACKAGE BODY WMSendereco_checkout AS
 
-    FUNCTION esta_no_intervalo_valido(p_endereco VARCHAR2) RETURN BOOLEAN IS
-    BEGIN
-        RETURN (p_endereco BETWEEN c_inicio_intervalo_1 AND c_fim_intervalo_1)
-            OR (p_endereco BETWEEN c_inicio_intervalo_2 AND c_fim_intervalo_2);
-    END;
-    
     FUNCTION buscar_codend_disponivel RETURN NUMBER IS
+        
         v_codend NUMBER;
+        
     BEGIN
+        
         SELECT e.codend
         INTO v_codend
         FROM tgwend e
@@ -22,7 +19,10 @@ CREATE OR REPLACE PACKAGE BODY WMSendereco_checkout AS
           AND e.ativo = 'S'
           AND e.codend <> 0
           AND e.picking = 'N'
-          AND esta_no_intervalo_valido(e.endereco) = TRUE
+          AND (
+              (e.endereco BETWEEN c_inicio_intervalo_1 AND c_fim_intervalo_1)
+              OR (e.endereco BETWEEN c_inicio_intervalo_2 AND c_fim_intervalo_2)
+          )
           AND NOT EXISTS (
               SELECT 1
               FROM vgwsepchk v
@@ -38,7 +38,10 @@ CREATE OR REPLACE PACKAGE BODY WMSendereco_checkout AS
     END buscar_codend_disponivel;
 
     FUNCTION obter_endereco(p_codend IN NUMBER) RETURN VARCHAR2 IS
+
         v_endereco VARCHAR2(100);
+    
+
     BEGIN
         SELECT endereco
         INTO v_endereco
@@ -50,6 +53,7 @@ CREATE OR REPLACE PACKAGE BODY WMSendereco_checkout AS
         WHEN NO_DATA_FOUND THEN
             RETURN NULL;
     END obter_endereco;
+    
     
 END WMSendereco_checkout;
 /

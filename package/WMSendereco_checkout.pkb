@@ -84,7 +84,32 @@ CREATE OR REPLACE PACKAGE BODY WMSendereco_checkout AS
     END liberar_checkout;  
     
     
-    
+    /*
+    */
+    /* Atualizar Endereço de Checkout */
+    PROCEDURE ATUALIZA_CHECKOUT_NAITT(p_nutarefa IN NUMBER) IS
+        v_codend_disponivel NUMBER;
+    BEGIN
+        -- Buscar endereço de checkout disponível
+        v_codend_disponivel := buscar_codend_disponivel();
+        
+        IF v_codend_disponivel IS NOT NULL THEN
+            -- Atualizar o endereço de checkout na tabela TGWITT
+            UPDATE TGWITT ITT
+            SET ITT.CODENDDESTINO = v_codend_disponivel
+            WHERE ITT.NUTAREFA = p_nutarefa
+              AND ITT.CODENDORIGEM <> 15200  -- Verifica se o CODENDORIGEM é diferente de 15200
+              AND ITT.CODAREASEP <> 3  -- Verifica se a área de separação é diferente de 3
+              AND EXISTS (
+                  SELECT 1
+                  FROM TGWTAR TAR
+                  WHERE TAR.CODTAREFA = 3  -- Verifica se o CODTAREFA é igual a 3 na tabela TGWTAR
+                    AND TAR.NUTAREFA = ITT.NUTAREFA
+              );
+            
+            COMMIT;
+        END IF;
+    END ATUALIZA_CHECKOUT_NAITT;
     
     
 END WMSendereco_checkout;

@@ -18,5 +18,7 @@ CREATE OR REPLACE PACKAGE WMSendereco_checkout AS
     PROCEDURE liberar_checkout(p_codend IN NUMBER);
     PROCEDURE limpar_checkouts_expirados;
     
+    PROCEDURE ATUALIZA_CHECKOUT_NAITT(p_nutarefa IN NUMBER);
+    
 END WMSendereco_checkout;
 /

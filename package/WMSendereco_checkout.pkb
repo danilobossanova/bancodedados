@@ -24,6 +24,26 @@ CREATE OR REPLACE PACKAGE BODY WMSendereco_checkout AS
     FUNCTION buscar_codend_disponivel RETURN NUMBER IS
         v_codend NUMBER;
     BEGIN
+    
+        -- Verificar se já existe um CODENDDESTINO definido na TGWITT para NUTAREFA
+        BEGIN
+            SELECT DISTINCT i.codenddestino
+            INTO v_codenddestino
+            FROM tgwitt i
+            WHERE i.nutarefa = p_nutarefa
+              AND i.codenddestino IS NOT NULL
+              AND i.codenddestino NOT IN (15195, 15200)
+              AND i.codenddestino != i.codendorigem;
+            
+            -- Se encontrou um CODENDDESTINO válido, retornar este valor
+            RETURN v_codenddestino;
+            
+        EXCEPTION
+            WHEN NO_DATA_FOUND THEN
+                -- Continuar com a lógica original se não encontrar um CODENDDESTINO válido
+                NULL;
+        END;
+     
         -- Limpar checkouts expirados antes de buscar um novo
         limpar_checkouts_expirados;
         
